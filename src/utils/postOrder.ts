@@ -11,7 +11,6 @@ const MIN_SHARES = 1;
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
-// Safe orderbook fetch
 const getOrderBookSafe = async (
     clobClient: ClobClient,
     tokenID: string,
@@ -38,7 +37,6 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
-
     let retry = 0;
 
     // ================= MERGE =================
@@ -65,10 +63,9 @@ const postOrder = async (
                 parseFloat(b.price) > parseFloat(a.price) ? b : a
             );
 
-            const rawBid = parseFloat(bestBid.price);
-            if (rawBid < trade.price - MAX_SLIPPAGE) break;
+            console.log('Best bid:', bestBid);
 
-            const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
+            const bidPrice = Math.max(0, parseFloat(bestBid.price) - PRICE_NUDGE);
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
             if (sizeToSell < MIN_SHARES) break;
 
@@ -116,6 +113,8 @@ const postOrder = async (
                 parseFloat(b.price) < parseFloat(a.price) ? b : a
             );
 
+            console.log('Best ask:', bestAsk);
+
             const rawAsk = parseFloat(bestAsk.price);
             if (Math.abs(rawAsk - trade.price) > MAX_SLIPPAGE) {
                 console.log('Ask price too far from target — skipping');
@@ -125,9 +124,7 @@ const postOrder = async (
             const askPrice = rawAsk + PRICE_NUDGE;
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
-            const sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
-
-            if (sharesToBuy < MIN_SHARES) break;
+            const sharesToBuy = Math.max(MIN_SHARES, Math.min(maxSharesAtLevel, affordableShares));
 
             const order_args = {
                 side: Side.BUY,
@@ -180,13 +177,10 @@ const postOrder = async (
                 parseFloat(b.price) > parseFloat(a.price) ? b : a
             );
 
-            const rawBid = parseFloat(bestBid.price);
-            if (rawBid < trade.price - MAX_SLIPPAGE) break;
+            console.log('Best bid:', bestBid);
 
-            const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
-            const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
-
-            if (sizeToSell < MIN_SHARES) break;
+            const bidPrice = Math.max(0, parseFloat(bestBid.price) - PRICE_NUDGE);
+            const sizeToSell = Math.max(MIN_SHARES, Math.min(remaining, parseFloat(bestBid.size)));
 
             const order_args = {
                 side: Side.SELL,
