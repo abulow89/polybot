@@ -185,7 +185,7 @@ const postOrder = async (
             const sharesToBuy = Math.max(MIN_SHARES, Math.min(maxSharesAtLevel, affordableShares));
             if (sharesToBuy <= 0) break;
 
-            const feeRateBps = await getMarketTakerFeeBps(clobClient, trade.asset);
+            const feeRateBps = await getMarketTakerFeeRateBps(clobClient, trade.asset);
 
             const order_args = {
                 side: Side.BUY,
