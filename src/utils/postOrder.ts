@@ -86,7 +86,7 @@ const postOrder = async (
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: bidPrice,
-                feeRateBps
+                feeRateBps: getFeeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -142,7 +142,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps
+                feeRateBps: getFeeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -199,7 +199,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sizeToSell,
                 price: bidPrice,
-                feeRateBps
+                feeRateBps: getFeeRateBps
             };
 
             console.log('Order args:', order_args);
