@@ -29,6 +29,17 @@ const getOrderBookSafe = async (
     }
 };
 
+// helper: get current market taker fee (bps)
+const getMarketTakerFeeBps = async (clobClient: ClobClient, tokenID: string) => {
+    try {
+        const marketInfo = await clobClient.getMarket(tokenID);
+        return marketInfo?.takerFeeBps || 0;
+    } catch (err) {
+        console.log('Error fetching market taker fee, defaulting to 0:', err);
+        return 0;
+    }
+};
+
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -124,12 +135,15 @@ const postOrder = async (
 
             if (sharesToBuy <= 0) break;
 
+            // fetch dynamic taker fee for this market
+            const feeRateBps = await getMarketTakerFeeBps(clobClient, trade.asset);
+
             const order_args = {
                 side: Side.BUY,
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps: 1000
+                feeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -181,12 +195,15 @@ const postOrder = async (
             const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
 
+            // fetch dynamic taker fee for this market
+            const feeRateBps = await getMarketTakerFeeBps(clobClient, trade.asset);
+
             const order_args = {
                 side: Side.SELL,
                 tokenID: trade.asset,
                 amount: sizeToSell,
                 price: bidPrice,
-                feeRateBps: 1000
+                feeRateBps
             };
 
             console.log('Order args:', order_args);
