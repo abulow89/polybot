@@ -10,24 +10,6 @@ const PRICE_NUDGE = 0.001; // makes FOK behave more like IOC
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
-// helper: safe getOrderBook that treats 404 as terminal
-const getOrderBookSafe = async (
-    clobClient: ClobClient,
-    tokenID: string,
-    tradeId: string
-) => {
-    try {
-        return await clobClient.getOrderBook(tokenID);
-    } catch (err: any) {
-        if (err?.response?.status === 404) {
-            console.log('No CLOB market for token — skipping permanently');
-            await UserActivity.updateOne({ _id: tradeId }, { bot: true });
-            return null; // terminal
-        }
-        throw err; // rethrow other errors
-    }
-};
-
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -52,8 +34,7 @@ const postOrder = async (
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
-            const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            const orderBook = await clobClient.getOrderBook(trade.asset);
             if (!orderBook.bids?.length) break;
 
             const bestBid = orderBook.bids.reduce((a, b) =>
@@ -63,7 +44,7 @@ const postOrder = async (
             const rawBid = parseFloat(bestBid.price);
             if (rawBid < trade.price - MAX_SLIPPAGE) break;
 
-            const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
+            const bidPrice = Math.max(0, rawBid - PRICE_NUDGE); // 🔻 nudge down for priority
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
 
             const order_args = {
@@ -95,8 +76,7 @@ const postOrder = async (
         let retry = 0;
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-            const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            const orderBook = await clobClient.getOrderBook(trade.asset);
             if (!orderBook.asks?.length) break;
 
             const bestAsk = orderBook.asks.reduce((a, b) =>
@@ -106,7 +86,7 @@ const postOrder = async (
             const rawAsk = parseFloat(bestAsk.price);
             if (Math.abs(rawAsk - trade.price) > MAX_SLIPPAGE) break;
 
-            const askPrice = rawAsk + PRICE_NUDGE;
+            const askPrice = rawAsk + PRICE_NUDGE; // 🔺 nudge up for priority
 
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
@@ -150,8 +130,7 @@ const postOrder = async (
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
-            const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            const orderBook = await clobClient.getOrderBook(trade.asset);
             if (!orderBook.bids?.length) break;
 
             const bestBid = orderBook.bids.reduce((a, b) =>
