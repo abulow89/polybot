@@ -38,6 +38,11 @@ const postOrder = async (
     user_balance: number
 ) => {
 
+    console.log('--------------------------------------------');
+    console.log(`My Balance: ${my_balance}, Target User Balance: ${user_balance}`);
+    console.log(`Processing ${condition.toUpperCase()} for token ${trade.asset}...`);
+    console.log('--------------------------------------------');
+
     // ================= MERGE =================
     if (condition === 'merge') {
         console.log('Merging Strategy...');
@@ -58,33 +63,34 @@ const postOrder = async (
 
             const bestBid = orderBook.bids.reduce((max, bid) =>
                 parseFloat(bid.price) > parseFloat(max.price) ? bid : max
-            );
+            , orderBook.bids[0]);
 
             const rawBid = parseFloat(bestBid.price);
             if (rawBid < trade.price - MAX_SLIPPAGE) break;
 
             const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
-            const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
+            const sizeToSell = Math.max(1, Math.min(remaining, parseFloat(bestBid.size)));
 
             const order_args = {
                 side: Side.SELL,
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: bidPrice,
+                feeRateBps: orderBook.takerFeeBps || 1000
             };
 
-            console.log('Order args:', order_args);
+            console.log('Merge Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            console.log('Merge order response:', resp);
 
             if (resp.success) {
                 remaining -= sizeToSell;
                 retry = 0;
-                console.log('Successfully posted order:', resp);
             } else {
                 retry++;
-                console.log('Error posting order: retrying...', resp);
+                console.log(`Merge retry #${retry}`);
             }
         }
 
@@ -98,6 +104,8 @@ const postOrder = async (
         const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
 
+        console.log(`Buy ratio: ${ratio}, Remaining USDC to spend: ${remainingUSDC}`);
+
         let retry = 0;
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
@@ -107,16 +115,18 @@ const postOrder = async (
 
             const bestAsk = orderBook.asks.reduce((min, ask) =>
                 parseFloat(ask.price) < parseFloat(min.price) ? ask : min
-            );
+            , orderBook.asks[0]);
 
             const rawAsk = parseFloat(bestAsk.price);
-            if (Math.abs(rawAsk - trade.price) > MAX_SLIPPAGE) break;
+            if (Math.abs(rawAsk - trade.price) > MAX_SLIPPAGE) {
+                console.log('Ask price too far from target — skipping');
+                break;
+            }
 
             const askPrice = rawAsk + PRICE_NUDGE;
-
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
-            const sharesToBuy = Math.max(1, Math.min(maxSharesAtLevel, affordableShares)); // enforce min 1 share
+            const sharesToBuy = Math.max(1, Math.min(maxSharesAtLevel, affordableShares));
 
             if (sharesToBuy <= 0) break;
 
@@ -125,20 +135,21 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
+                feeRateBps: orderBook.takerFeeBps || 1000
             };
 
-            console.log('Order args:', order_args);
+            console.log('Buy Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            console.log('Buy order response:', resp);
 
             if (resp.success) {
                 remainingUSDC -= sharesToBuy * askPrice;
                 retry = 0;
-                console.log('Successfully posted order:', resp);
             } else {
                 retry++;
-                console.log('Error posting order: retrying...', resp);
+                console.log(`Buy retry #${retry}`);
             }
         }
 
@@ -161,6 +172,8 @@ const postOrder = async (
         let remaining = my_position.size * reductionPct;
         let retry = 0;
 
+        console.log(`Remaining shares to sell: ${remaining}`);
+
         while (remaining > 0 && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
             if (!orderBook) return; // 404 terminal
@@ -168,33 +181,34 @@ const postOrder = async (
 
             const bestBid = orderBook.bids.reduce((max, bid) =>
                 parseFloat(bid.price) > parseFloat(max.price) ? bid : max
-            );
+            , orderBook.bids[0]);
 
             const rawBid = parseFloat(bestBid.price);
             if (rawBid < trade.price - MAX_SLIPPAGE) break;
 
             const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
-            const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
+            const sharesToSell = Math.max(1, Math.min(remaining, parseFloat(bestBid.size)));
 
             const order_args = {
                 side: Side.SELL,
                 tokenID: trade.asset,
-                amount: sizeToSell,
+                amount: sharesToSell,
                 price: bidPrice,
+                feeRateBps: orderBook.takerFeeBps || 1000
             };
 
-            console.log('Order args:', order_args);
+            console.log('Sell Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            console.log('Sell order response:', resp);
 
             if (resp.success) {
-                remaining -= sizeToSell;
+                remaining -= sharesToSell;
                 retry = 0;
-                console.log('Successfully posted order:', resp);
             } else {
                 retry++;
-                console.log('Error posting order: retrying...', resp);
+                console.log(`Sell retry #${retry}`);
             }
         }
 
