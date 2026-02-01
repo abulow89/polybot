@@ -7,7 +7,7 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const MAX_SLIPPAGE = 0.05;
 const PRICE_NUDGE = 0.001; // makes FOK behave more like IOC
-const MIN_SHARES = 1;       // enforce minimum 1 share
+const MIN_SHARES = 0.01;       // enforce minimum 1 share
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
