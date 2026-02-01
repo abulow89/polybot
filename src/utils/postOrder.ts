@@ -246,7 +246,7 @@ const postOrder = async (
             const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
 
-            const feeRateBps = await getMarketTakerFeeBps(clobClient, trade.asset);
+            const feeRateBps = await getMarketTakerFeeRateBps(clobClient, trade.asset);
 
             const order_args = {
                 side: Side.SELL,
