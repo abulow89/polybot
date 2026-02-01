@@ -29,6 +29,18 @@ const getOrderBookSafe = async (
     }
 };
 
+// helper: get dynamic feeRateBps for token
+const getFeeRateBps = async (clobClient: ClobClient, tokenID: string, condition: string) => {
+    try {
+        const market = await clobClient.getMarket(tokenID);
+        if (market?.feeRateBps != null) return market.feeRateBps;
+    } catch (err) {
+        console.log(`Failed to fetch feeRateBps for token ${tokenID}, falling back...`);
+    }
+    // fallback if API fails or value undefined
+    return condition === 'buy' ? 0 : 1000;
+};
+
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -48,12 +60,14 @@ const postOrder = async (
             return;
         }
 
+        const feeRateBps = await getFeeRateBps(clobClient, trade.asset, 'sell');
+
         let remaining = my_position.size;
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            if (!orderBook) return;
             if (!orderBook.bids?.length) break;
 
             const bestBid = orderBook.bids.reduce(
@@ -72,6 +86,7 @@ const postOrder = async (
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: bidPrice,
+                feeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -99,9 +114,11 @@ const postOrder = async (
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
         let retry = 0;
 
+        const feeRateBps = await getFeeRateBps(clobClient, trade.asset, 'buy');
+
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            if (!orderBook) return;
             if (!orderBook.asks?.length) break;
 
             const bestAsk = orderBook.asks.reduce(
@@ -119,9 +136,7 @@ const postOrder = async (
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
 
-            // enforce minimum 1 share
             const sharesToBuy = Math.max(MIN_SHARES, Math.min(maxSharesAtLevel, affordableShares));
-
             if (sharesToBuy <= 0) break;
 
             const order_args = {
@@ -129,7 +144,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps: 1000
+                feeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -162,12 +177,14 @@ const postOrder = async (
         const userPrevSize = (user_position?.size || 0) + trade.size;
         const reductionPct = userPrevSize > 0 ? trade.size / userPrevSize : 1;
 
+        const feeRateBps = await getFeeRateBps(clobClient, trade.asset, 'sell');
+
         let remaining = my_position.size * reductionPct;
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            if (!orderBook) return;
             if (!orderBook.bids?.length) break;
 
             const bestBid = orderBook.bids.reduce(
@@ -186,7 +203,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sizeToSell,
                 price: bidPrice,
-                feeRateBps: 1000
+                feeRateBps
             };
 
             console.log('Order args:', order_args);
