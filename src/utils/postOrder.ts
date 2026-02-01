@@ -3,7 +3,7 @@ const MAX_PRICE = 0.99;   // maximum allowed price on CLOB
 const MIN_USD_ORDER = 0.01; // minimum order value in USD
 
 // ================= BUY =================
-else if (condition === 'buy') {
+if (condition === 'buy') {
     console.log('Buy Strategy...');
     const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
     let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
