@@ -19,50 +19,72 @@ let temp_trades: UserActivityInterface[] = [];
 
 const init = async () => {
     temp_trades = (await UserActivity.find().exec()).map((trade) => trade as UserActivityInterface);
+    console.log('Loaded temp trades from DB:', temp_trades.length);
 };
 
 const fetchTradeData = async () => {
-    const user_positions: UserPositionInterface[] = await fetchData(
-        `https://data-api.polymarket.com/positions?user=${USER_ADDRESS}`
-    );
-    const user_activities: UserActivityInterface[] = await fetchData(
-        `https://data-api.polymarket.com/activity?user=${USER_ADDRESS}&limit=100&offset=0`
-    );
-
-    await UserPosition.deleteMany({});
-    await UserPosition.insertMany(user_positions);
-
     try {
+        const user_positions: UserPositionInterface[] = await fetchData(
+            `https://data-api.polymarket.com/positions?user=${USER_ADDRESS}`
+        );
+        const user_activities: UserActivityInterface[] = await fetchData(
+            `https://data-api.polymarket.com/activity?user=${USER_ADDRESS}&limit=50&offset=0`
+        );
+
+        if (!Array.isArray(user_activities)) {
+            console.error('Fetched activities is not an array:', user_activities);
+            return;
+        }
+
+        console.log(`Fetched ${user_activities.length} activities`);
+
+        await UserPosition.deleteMany({});
+        await UserPosition.insertMany(user_positions);
+
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+
         const new_trades = user_activities
             .filter((activity: UserActivityInterface) => {
-                return !temp_trades.some(
-                    (existingActivity: UserActivityInterface) =>
-                        existingActivity.transactionHash === activity.transactionHash
+                const isDuplicate = temp_trades.some(
+                    (existingActivity) => existingActivity.transactionHash === activity.transactionHash
                 );
+                if (isDuplicate) {
+                    console.log('Skipping duplicate trade:', activity.transactionHash);
+                }
+                return !isDuplicate;
             })
             .filter((activity: UserActivityInterface) => {
-                const currentTimestamp = Math.floor(moment().valueOf() / 1000);
-                return activity.timestamp + TOO_OLD_TIMESTAMP * 60 * 60 > currentTimestamp;     //Fetch user transactions only an hour before
+                const withinWindow = activity.timestamp + TOO_OLD_TIMESTAMP * 60 * 60 > currentTimestamp;
+                if (!withinWindow) {
+                    console.log('Skipping old trade:', activity.transactionHash, 'timestamp:', activity.timestamp);
+                }
+                return withinWindow;
             })
-            .map((activity: UserActivityInterface) => {
-                return { ...activity, bot: false, botExcutedTime: 0 };
-            })
-            .sort(
-                (a: { timestamp: number }, b: { timestamp: number }) => a.timestamp - b.timestamp
-            );
+            .map((activity: UserActivityInterface) => ({
+                ...activity,
+                bot: false,
+                botExcutedTime: 0,
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+        console.log('New trades to insert:', new_trades.length);
+
         temp_trades = [...temp_trades, ...new_trades];
-        await UserActivity.insertMany(new_trades);
-    } catch (error) {
-        console.error('Error inserting new trades:', error);
+        if (new_trades.length > 0) {
+            await UserActivity.insertMany(new_trades);
+        }
+    } catch (error: any) {
+        console.error('Error fetching or inserting trades:', error.message || error);
     }
 };
 
 const tradeMonitor = async () => {
     console.log('Trade Monitor is running every', FETCH_INTERVAL, 'seconds');
-    await init();    //Load my oders before sever downs
+    await init();
+
     while (true) {
-        await fetchTradeData();     //Fetch all user activities
-        await new Promise((resolve) => setTimeout(resolve, FETCH_INTERVAL * 1000));     //Fetch user activities every second
+        await fetchTradeData();
+        await new Promise((resolve) => setTimeout(resolve, FETCH_INTERVAL * 1000));
     }
 };
 
