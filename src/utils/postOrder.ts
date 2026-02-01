@@ -1,4 +1,3 @@
-can you make those updates in here while keeping all the other functions working as is and provide back a coplete working drop in copy?
 import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
