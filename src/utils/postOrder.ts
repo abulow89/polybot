@@ -209,7 +209,7 @@ const postOrder = async (
             console.log('Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const resp = await clobClient.postOrder(signedOrder, OrderType.IOC);
 
             if (resp.success) {
                 remaining -= sizeToSell;
