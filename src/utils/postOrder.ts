@@ -10,6 +10,58 @@ const PRICE_NUDGE = 0.001; // makes FOK behave more like IOC
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
+// ================= HELPERS =================
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 350; // ms between ANY exchange call
+
+const throttle = async () => {
+    const now = Date.now();
+    const diff = now - lastRequestTime;
+    if (diff < MIN_REQUEST_INTERVAL) {
+        await sleep(MIN_REQUEST_INTERVAL - diff);
+    }
+    lastRequestTime = Date.now();
+};
+
+// Wraps any exchange call with throttle + retry/backoff
+const safeRequest = async <T>(fn: () => Promise<T>, retry = 0): Promise<T> => {
+    try {
+        await throttle();
+        return await fn();
+    } catch (err: any) {
+        const status = err?.response?.status;
+
+        // RATE LIMIT
+        if (status === 429) {
+            const backoff = Math.min(2000 * Math.pow(2, retry) + Math.random() * 500, 10000);
+            console.log(`Rate limited. Cooling off ${backoff}ms...`);
+            await sleep(backoff);
+            return safeRequest(fn, retry + 1);
+        }
+
+        // SERVER ERRORS
+        if (status >= 500) {
+            const backoff = 1000 + Math.random() * 1000;
+            console.log(`Server error ${status}. Retry in ${backoff}ms`);
+            await sleep(backoff);
+            return safeRequest(fn, retry + 1);
+        }
+
+        throw err;
+    }
+};
+
+// Exponential backoff for loop retries
+const loopBackoff = async (retry: number) => {
+    if (retry <= 0) return;
+    const delay = Math.min(300 * Math.pow(2, retry) + Math.random() * 200, 5000);
+    console.log(`Loop retry ${retry}, backing off ${Math.round(delay)}ms`);
+    await sleep(delay);
+};
+
+// ================= POST ORDER =================
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -34,7 +86,7 @@ const postOrder = async (
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await safeRequest(() => clobClient.getOrderBook(trade.asset));
             if (!orderBook.bids?.length) break;
 
             const bestBid = orderBook.bids.reduce((a, b) =>
@@ -44,7 +96,7 @@ const postOrder = async (
             const rawBid = parseFloat(bestBid.price);
             if (rawBid < trade.price - MAX_SLIPPAGE) break;
 
-            const bidPrice = Math.max(0, rawBid - PRICE_NUDGE); // 🔻 nudge down for priority
+            const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
 
             const order_args = {
@@ -54,13 +106,18 @@ const postOrder = async (
                 price: bidPrice,
             };
 
-            const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const signedOrder = await safeRequest(() => clobClient.createMarketOrder(order_args));
+            const resp = await safeRequest(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
             if (resp.success) {
                 remaining -= sizeToSell;
                 retry = 0;
-            } else retry++;
+            } else {
+                retry++;
+                await loopBackoff(retry); // exponential backoff inside loop
+            }
+
+            await sleep(200 + Math.random() * 300); // small human-like loop pause
         }
 
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -76,7 +133,7 @@ const postOrder = async (
         let retry = 0;
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await safeRequest(() => clobClient.getOrderBook(trade.asset));
             if (!orderBook.asks?.length) break;
 
             const bestAsk = orderBook.asks.reduce((a, b) =>
@@ -86,7 +143,7 @@ const postOrder = async (
             const rawAsk = parseFloat(bestAsk.price);
             if (Math.abs(rawAsk - trade.price) > MAX_SLIPPAGE) break;
 
-            const askPrice = rawAsk + PRICE_NUDGE; // 🔺 nudge up for priority
+            const askPrice = rawAsk + PRICE_NUDGE;
 
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
@@ -101,13 +158,18 @@ const postOrder = async (
                 price: askPrice,
             };
 
-            const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const signedOrder = await safeRequest(() => clobClient.createMarketOrder(order_args));
+            const resp = await safeRequest(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
             if (resp.success) {
                 remainingUSDC -= sharesToBuy * askPrice;
                 retry = 0;
-            } else retry++;
+            } else {
+                retry++;
+                await loopBackoff(retry);
+            }
+
+            await sleep(200 + Math.random() * 300);
         }
 
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -130,7 +192,7 @@ const postOrder = async (
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await safeRequest(() => clobClient.getOrderBook(trade.asset));
             if (!orderBook.bids?.length) break;
 
             const bestBid = orderBook.bids.reduce((a, b) =>
@@ -150,13 +212,18 @@ const postOrder = async (
                 price: bidPrice,
             };
 
-            const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const signedOrder = await safeRequest(() => clobClient.createMarketOrder(order_args));
+            const resp = await safeRequest(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
             if (resp.success) {
                 remaining -= sizeToSell;
                 retry = 0;
-            } else retry++;
+            } else {
+                retry++;
+                await loopBackoff(retry);
+            }
+
+            await sleep(200 + Math.random() * 300);
         }
 
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -168,3 +235,4 @@ const postOrder = async (
 };
 
 export default postOrder;
+
