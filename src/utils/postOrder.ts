@@ -37,8 +37,7 @@ const getFeeRateBps = async (clobClient: ClobClient, tokenID: string, condition:
     } catch (err) {
         console.log(`Failed to fetch feeRateBps for token ${tokenID}, falling back...`);
     }
-    // fallback if API fails or value undefined
-    return condition === 'buy' ? 0 : 1000;
+    return condition === 'buy' ? 0 : 1000; // fallback
 };
 
 const postOrder = async (
@@ -51,6 +50,9 @@ const postOrder = async (
     user_balance: number
 ) => {
 
+    // fetch feeRateBps **once** at the start
+    const feeRateBps = await getFeeRateBps(clobClient, trade.asset, condition);
+
     // ================= MERGE =================
     if (condition === 'merge') {
         console.log('Merging Strategy...');
@@ -59,8 +61,6 @@ const postOrder = async (
             await UserActivity.updateOne({ _id: trade._id }, { bot: true });
             return;
         }
-
-        const feeRateBps = await getFeeRateBps(clobClient, trade.asset, 'sell');
 
         let remaining = my_position.size;
         let retry = 0;
@@ -86,7 +86,7 @@ const postOrder = async (
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: bidPrice,
-                feeRateBps
+                feeRateBps: getFeeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -113,8 +113,6 @@ const postOrder = async (
         const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
         let retry = 0;
-
-        const feeRateBps = await getFeeRateBps(clobClient, trade.asset, 'buy');
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
@@ -144,7 +142,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps
+                feeRateBps: getFeeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -177,8 +175,6 @@ const postOrder = async (
         const userPrevSize = (user_position?.size || 0) + trade.size;
         const reductionPct = userPrevSize > 0 ? trade.size / userPrevSize : 1;
 
-        const feeRateBps = await getFeeRateBps(clobClient, trade.asset, 'sell');
-
         let remaining = my_position.size * reductionPct;
         let retry = 0;
 
@@ -203,7 +199,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sizeToSell,
                 price: bidPrice,
-                feeRateBps
+                feeRateBps: getFeeRateBps
             };
 
             console.log('Order args:', order_args);
