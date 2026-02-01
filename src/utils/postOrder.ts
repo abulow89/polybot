@@ -6,12 +6,12 @@ import { ENV } from '../config/env';
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const MAX_SLIPPAGE = 0.05;
-const PRICE_NUDGE = 0.001; // makes FOK behave more like IOC
-const MIN_SHARES = 1; // enforce minimum 1 share
+const PRICE_NUDGE = 0.001;
+const MIN_SHARES = 1;
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
-// helper: safe getOrderBook that treats 404 as terminal
+// Safe orderbook fetch
 const getOrderBookSafe = async (
     clobClient: ClobClient,
     tokenID: string,
@@ -23,9 +23,9 @@ const getOrderBookSafe = async (
         if (err?.response?.status === 404) {
             console.log('No CLOB market for token — skipping permanently');
             await UserActivity.updateOne({ _id: tradeId }, { bot: true });
-            return null; // terminal
+            return null;
         }
-        throw err; // rethrow other errors
+        throw err;
     }
 };
 
@@ -38,6 +38,9 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
+
+    let retry = 0;
+
     // ================= MERGE =================
     if (condition === 'merge') {
         console.log('Merging Strategy...');
@@ -48,13 +51,13 @@ const postOrder = async (
         }
 
         let remaining = my_position.size;
-        let retry = 0;
 
         while (remaining >= MIN_SHARES && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            if (!orderBook) return;
+
             if (!orderBook.bids?.length) {
-                console.log('No bids found in orderbook');
+                console.log('No bids found');
                 break;
             }
 
@@ -63,14 +66,10 @@ const postOrder = async (
             );
 
             const rawBid = parseFloat(bestBid.price);
-            if (rawBid < trade.price - MAX_SLIPPAGE) {
-                console.log('Best bid below acceptable price — skipping');
-                break;
-            }
+            if (rawBid < trade.price - MAX_SLIPPAGE) break;
 
             const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
-
             if (sizeToSell < MIN_SHARES) break;
 
             const order_args = {
@@ -81,6 +80,7 @@ const postOrder = async (
             };
 
             console.log('Order args (MERGE):', order_args);
+
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
@@ -102,13 +102,13 @@ const postOrder = async (
         console.log('Buy Strategy...');
         const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
-        let retry = 0;
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            if (!orderBook) return;
+
             if (!orderBook.asks?.length) {
-                console.log('No asks found in orderbook');
+                console.log('No asks found');
                 break;
             }
 
@@ -137,11 +137,12 @@ const postOrder = async (
             };
 
             console.log('Order args (BUY):', order_args);
+
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
             if (resp.success) {
-                console.log('Successfully posted BUY order:', resp);
+                console.log(`Successfully posted BUY order: ${sharesToBuy} shares at ${askPrice}`, resp);
                 remainingUSDC -= sharesToBuy * askPrice;
                 retry = 0;
             } else {
@@ -165,13 +166,13 @@ const postOrder = async (
         const userPrevSize = (user_position?.size || 0) + trade.size;
         const reductionPct = userPrevSize > 0 ? trade.size / userPrevSize : 1;
         let remaining = my_position.size * reductionPct;
-        let retry = 0;
 
         while (remaining >= MIN_SHARES && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
-            if (!orderBook) return; // 404 terminal
+            if (!orderBook) return;
+
             if (!orderBook.bids?.length) {
-                console.log('No bids found in orderbook');
+                console.log('No bids found');
                 break;
             }
 
@@ -180,10 +181,7 @@ const postOrder = async (
             );
 
             const rawBid = parseFloat(bestBid.price);
-            if (rawBid < trade.price - MAX_SLIPPAGE) {
-                console.log('Bid price below acceptable price — skipping');
-                break;
-            }
+            if (rawBid < trade.price - MAX_SLIPPAGE) break;
 
             const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
@@ -198,11 +196,12 @@ const postOrder = async (
             };
 
             console.log('Order args (SELL):', order_args);
+
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
             if (resp.success) {
-                console.log('Successfully posted SELL order:', resp);
+                console.log(`Successfully posted SELL order: ${sizeToSell} shares at ${bidPrice}`, resp);
                 remaining -= sizeToSell;
                 retry = 0;
             } else {
