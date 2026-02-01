@@ -68,59 +68,69 @@ const postOrder = async (
     }
 
     // ================= BUY =================
-    else if (condition === 'buy') {
-        console.log('Buy Strategy...');
-        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-        let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
-        let retry = 0;
+else if (condition === 'buy') {
+    console.log('Buy Strategy...');
 
-        while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-            const orderBook = await clobClient.getOrderBook(trade.asset);
-            if (!orderBook.asks || orderBook.asks.length === 0) {
-                console.log('No asks found');
-                await UserActivity.updateOne({ _id: trade._id }, { bot: true });
-                break;
-            }
+    const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+    let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
 
-            const minPriceAsk = orderBook.asks.reduce((min, current) => 
-                parseFloat(current.price) < parseFloat(min.price) ? current : min
-            , orderBook.asks[0]);
+    let retry = 0;
 
-            console.log('Min price ask:', minPriceAsk);
+    while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+        const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
+        if (!orderBook) return; // 404 terminal
+        if (!orderBook.asks?.length) break;
 
-            const askPrice = parseFloat(minPriceAsk.price);
-            let affordableShares = remainingUSDC / askPrice;
-            const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+        const bestAsk = orderBook.asks.reduce((a, b) =>
+            parseFloat(b.price) < parseFloat(a.price) ? b : a
+        );
 
-            if (Math.abs(askPrice - trade.price) > 0.05) {
-                console.log('Ask price too far from target — skipping');
-                break;
-            }
-
-            const order_args = {
-                side: Side.BUY,
-                tokenID: trade.asset,
-                amount: sharesToBuy,
-                price: askPrice,
-                feeRateBps: 1000
-            };
-
-            console.log('Order args:', order_args);
-
-            const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
-
-            if (resp.success) {
-                console.log('Successfully posted order:', resp);
-                remainingUSDC -= sharesToBuy * askPrice;
-                retry = 0;
-            } else {
-                console.log('Error posting order: retrying...', resp);
-                retry++;
-            }
+        const rawAsk = parseFloat(bestAsk.price);
+        if (Math.abs(rawAsk - trade.price) > MAX_SLIPPAGE) {
+            console.log('Ask price too far from target — skipping');
+            break;
         }
-        await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+
+        const askPrice = rawAsk + PRICE_NUDGE;
+
+        const maxSharesAtLevel = parseFloat(bestAsk.size);
+        const affordableShares = remainingUSDC / askPrice;
+
+        // <-- allow fractional shares down to very small amounts
+        const minShare = 0.01; // or smaller depending on market tick size
+        const sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
+
+        if (sharesToBuy < minShare) {
+            console.log('Shares to buy below minimum tick size — skipping');
+            break;
+        }
+
+        const order_args = {
+            side: Side.BUY,
+            tokenID: trade.asset,
+            amount: sharesToBuy,
+            price: askPrice,
+            feeRateBps: 1000
+        };
+
+        console.log('Min price ask:', bestAsk);
+        console.log('Order args:', order_args);
+
+        const signedOrder = await clobClient.createMarketOrder(order_args);
+        const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+
+        if (resp.success) {
+            remainingUSDC -= sharesToBuy * askPrice;
+            retry = 0;
+            console.log('Successfully posted order:', resp);
+        } else {
+            retry++;
+            console.log('Error posting order: retrying...', resp);
+        }
     }
+
+    await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+}
 
     // ================= SELL =================
     else if (condition === 'sell') {
