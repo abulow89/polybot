@@ -81,10 +81,10 @@ const getOrderBookSafe = async (
 };
 
 // helper: get current market taker fee (bps)
-const getMarketTakerFeeBps = async (clobClient: ClobClient, tokenID: string) => {
+const getMarketTakerFeeRateBps = async (clobClient: ClobClient, tokenID: string) => {
     try {
         const marketInfo = await safeRequest(() => clobClient.getMarket(tokenID));
-        return marketInfo?.takerFeeBps || 0;
+        return marketInfo?.takerFeeRateBps || 0;
     } catch (err) {
         console.log('Error fetching market taker fee, defaulting to 0:', err);
         return 0;
