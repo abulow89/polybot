@@ -129,7 +129,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps: 0,1000
+                feeRateBps: 0:1000
             };
 
             console.log('Order args:', order_args);
