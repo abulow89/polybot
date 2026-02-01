@@ -5,7 +5,8 @@ import { ENV } from '../config/env';
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
-const MAX_SLIPPAGE = 0.05; // 5¢ protection
+const MAX_SLIPPAGE = 0.05;
+const PRICE_NUDGE = 0.001; // makes FOK behave more like IOC
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
@@ -40,14 +41,10 @@ const postOrder = async (
                 parseFloat(b.price) > parseFloat(a.price) ? b : a
             );
 
-            const bidPrice = parseFloat(bestBid.price);
+            const rawBid = parseFloat(bestBid.price);
+            if (rawBid < trade.price - MAX_SLIPPAGE) break;
 
-            // Slippage guard
-            if (bidPrice < trade.price - MAX_SLIPPAGE) {
-                console.log('Bid too low — abort merge');
-                break;
-            }
-
+            const bidPrice = Math.max(0, rawBid - PRICE_NUDGE); // 🔻 nudge down for priority
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
 
             const order_args = {
@@ -58,7 +55,7 @@ const postOrder = async (
             };
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.IOC);
+            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
             if (resp.success) {
                 remaining -= sizeToSell;
@@ -73,7 +70,6 @@ const postOrder = async (
     else if (condition === 'buy') {
         console.log('Buy Strategy...');
 
-        // safer scaling
         const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
 
@@ -87,13 +83,10 @@ const postOrder = async (
                 parseFloat(b.price) < parseFloat(a.price) ? b : a
             );
 
-            const askPrice = parseFloat(bestAsk.price);
+            const rawAsk = parseFloat(bestAsk.price);
+            if (Math.abs(rawAsk - trade.price) > MAX_SLIPPAGE) break;
 
-            // Bid/ask deviation guard
-            if (Math.abs(askPrice - trade.price) > MAX_SLIPPAGE) {
-                console.log('Price moved too far — skip copy');
-                break;
-            }
+            const askPrice = rawAsk + PRICE_NUDGE; // 🔺 nudge up for priority
 
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
@@ -104,12 +97,12 @@ const postOrder = async (
             const order_args = {
                 side: Side.BUY,
                 tokenID: trade.asset,
-                amount: sharesToBuy, // ✅ SHARES not USDC
+                amount: sharesToBuy,
                 price: askPrice,
             };
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.IOC);
+            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
             if (resp.success) {
                 remainingUSDC -= sharesToBuy * askPrice;
@@ -130,7 +123,6 @@ const postOrder = async (
             return;
         }
 
-        // better proportional reduction
         const userPrevSize = (user_position?.size || 0) + trade.size;
         const reductionPct = userPrevSize > 0 ? trade.size / userPrevSize : 1;
 
@@ -145,13 +137,10 @@ const postOrder = async (
                 parseFloat(b.price) > parseFloat(a.price) ? b : a
             );
 
-            const bidPrice = parseFloat(bestBid.price);
+            const rawBid = parseFloat(bestBid.price);
+            if (rawBid < trade.price - MAX_SLIPPAGE) break;
 
-            if (bidPrice < trade.price - MAX_SLIPPAGE) {
-                console.log('Bid slipped too far — stop sell');
-                break;
-            }
-
+            const bidPrice = Math.max(0, rawBid - PRICE_NUDGE);
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
 
             const order_args = {
@@ -162,7 +151,7 @@ const postOrder = async (
             };
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.IOC);
+            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
             if (resp.success) {
                 remaining -= sizeToSell;
