@@ -62,7 +62,7 @@ const postOrder = async (
             console.log('Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, 'IOC'); // ✅ IOC here
+            const resp = await clobClient.postOrder(signedOrder, 'IOC' as any); // ✅ IOC here
 
             await sleep(ORDER_POST_DELAY);
 
@@ -122,7 +122,7 @@ const postOrder = async (
             console.log('Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, 'IOC'); // ✅ IOC here
+            const resp = await clobClient.postOrder(signedOrder, 'IOC' as any); // ✅ IOC here
 
             await sleep(ORDER_POST_DELAY);
 
@@ -182,7 +182,7 @@ const postOrder = async (
             console.log('Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, 'IOC'); // ✅ IOC here
+            const resp = await clobClient.postOrder(signedOrder, 'IOC' as any); // ✅ IOC here
 
             await sleep(ORDER_POST_DELAY);
 
