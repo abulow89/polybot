@@ -1,4 +1,4 @@
-import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
+import { ClobClient, Side } from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
@@ -44,22 +44,30 @@ const postOrder = async (
                 break;
             }
 
-            const maxPriceBid = orderBook.bids.reduce((max, current) => 
+            const maxPriceBid = orderBook.bids.reduce((max, current) =>
                 parseFloat(current.price) > parseFloat(max.price) ? current : max
             , orderBook.bids[0]);
 
             console.log('Max price bid:', maxPriceBid);
 
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
+            const makerAmount = parseFloat(sizeToSell.toFixed(4));
+            const takerAmount = parseFloat((makerAmount * parseFloat(maxPriceBid.price)).toFixed(2));
+
+            if (takerAmount < 0.01) {
+                console.log('Order below dust threshold, skipping...');
+                break;
+            }
+
             const order_args = {
                 side: Side.SELL,
                 tokenID: my_position.asset,
-                amount: sizeToSell,
+                amount: makerAmount,
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
 
-            console.log('Order args:', order_args);
+            console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, 'IOC' as any);
@@ -68,7 +76,7 @@ const postOrder = async (
 
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
-                remaining -= sizeToSell;
+                remaining -= makerAmount;
                 retry = 0;
             } else {
                 console.log('Error posting order: retrying...', resp);
@@ -82,7 +90,7 @@ const postOrder = async (
     // ================= BUY =================
     else if (condition === 'buy') {
         console.log('Buy Strategy...');
-        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+        const ratio = Math.min(0.01, my_balance / Math.max(user_balance, 1));
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
         let retry = 0;
 
@@ -96,7 +104,7 @@ const postOrder = async (
                 break;
             }
 
-            const minPriceAsk = orderBook.asks.reduce((min, current) => 
+            const minPriceAsk = orderBook.asks.reduce((min, current) =>
                 parseFloat(current.price) < parseFloat(min.price) ? current : min
             , orderBook.asks[0]);
 
@@ -104,7 +112,15 @@ const postOrder = async (
 
             const askPrice = parseFloat(minPriceAsk.price);
             let affordableShares = remainingUSDC / askPrice;
-            const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+
+            // Maker/Taker rounding for API
+            const makerAmount = parseFloat(Math.max(0.0001, Math.min(affordableShares, parseFloat(minPriceAsk.size))).toFixed(4));
+            const takerAmount = parseFloat((makerAmount * askPrice).toFixed(2));
+
+            if (takerAmount < 0.01) {
+                console.log('Order below dust threshold, skipping...');
+                break;
+            }
 
             if (Math.abs(askPrice - trade.price) > 0.05) {
                 console.log('Ask price too far from target — skipping');
@@ -114,12 +130,12 @@ const postOrder = async (
             const order_args = {
                 side: Side.BUY,
                 tokenID: trade.asset,
-                amount: sharesToBuy,
+                amount: makerAmount,
                 price: askPrice,
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
 
-            console.log('Order args:', order_args);
+            console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, 'IOC' as any);
@@ -128,7 +144,7 @@ const postOrder = async (
 
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
-                remainingUSDC -= sharesToBuy * askPrice;
+                remainingUSDC -= takerAmount;
                 retry = 0;
             } else {
                 console.log('Error posting order: retrying...', resp);
@@ -164,22 +180,27 @@ const postOrder = async (
                 break;
             }
 
-            const maxPriceBid = orderBook.bids.reduce((max, current) => 
+            const maxPriceBid = orderBook.bids.reduce((max, current) =>
                 parseFloat(current.price) > parseFloat(max.price) ? current : max
             , orderBook.bids[0]);
 
-            console.log('Max price bid:', maxPriceBid);
+            const makerAmount = parseFloat(Math.min(remaining, parseFloat(maxPriceBid.size)).toFixed(4));
+            const takerAmount = parseFloat((makerAmount * parseFloat(maxPriceBid.price)).toFixed(2));
 
-            const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
+            if (takerAmount < 0.01) {
+                console.log('Order below dust threshold, skipping...');
+                break;
+            }
+
             const order_args = {
                 side: Side.SELL,
                 tokenID: trade.asset,
-                amount: sizeToSell,
+                amount: makerAmount,
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
 
-            console.log('Order args:', order_args);
+            console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, 'IOC' as any);
@@ -188,7 +209,7 @@ const postOrder = async (
 
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
-                remaining -= sizeToSell;
+                remaining -= makerAmount;
                 retry = 0;
             } else {
                 console.log('Error posting order: retrying...', resp);
