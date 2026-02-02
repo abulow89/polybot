@@ -162,9 +162,6 @@ try {
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
 
-            let sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
-
-
 let sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
 
 // ✅ Convert to integer
