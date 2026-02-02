@@ -70,6 +70,18 @@ const postOrder = async (
             console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
+            console.log('--- SIGNED ORDER DEBUG ---');
+console.log('Input makerAmount:', order_args.amount);
+console.log('Input takerAmount (if set):', (order_args as any).takerAmount || 'not provided');
+console.log('Price:', order_args.price);
+console.log('Side:', order_args.side);
+
+console.log('Converted makerAmount (base units):', signedOrder.order.makerAmount);
+console.log('Converted takerAmount (base units):', signedOrder.order.takerAmount);
+
+console.log('Full signed order payload:');
+console.log(JSON.stringify(signedOrder, null, 2));
+console.log('---------------------------');
             const resp = await clobClient.postOrder(signedOrder, 'IOC' as any);
 
             await sleep(ORDER_POST_DELAY);
@@ -90,7 +102,7 @@ const postOrder = async (
     // ================= BUY =================
     else if (condition === 'buy') {
         console.log('Buy Strategy...');
-        const ratio = Math.min(0.01, my_balance / Math.max(user_balance, 1));
+        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
         let retry = 0;
 
@@ -139,6 +151,18 @@ const postOrder = async (
         
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
+            console.log('--- SIGNED ORDER DEBUG ---');
+console.log('Input makerAmount:', order_args.amount);
+console.log('Input takerAmount (if set):', (order_args as any).takerAmount || 'not provided');
+console.log('Price:', order_args.price);
+console.log('Side:', order_args.side);
+
+console.log('Converted makerAmount (base units):', signedOrder.order.makerAmount);
+console.log('Converted takerAmount (base units):', signedOrder.order.takerAmount);
+
+console.log('Full signed order payload:');
+console.log(JSON.stringify(signedOrder, null, 2));
+console.log('---------------------------');
             const resp = await clobClient.postOrder(signedOrder, 'IOC' as any);
 
             await sleep(ORDER_POST_DELAY);
@@ -204,6 +228,18 @@ const postOrder = async (
             console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
+            console.log('--- SIGNED ORDER DEBUG ---');
+console.log('Input makerAmount:', order_args.amount);
+console.log('Input takerAmount (if set):', (order_args as any).takerAmount || 'not provided');
+console.log('Price:', order_args.price);
+console.log('Side:', order_args.side);
+
+console.log('Converted makerAmount (base units):', signedOrder.order.makerAmount);
+console.log('Converted takerAmount (base units):', signedOrder.order.takerAmount);
+
+console.log('Full signed order payload:');
+console.log(JSON.stringify(signedOrder, null, 2));
+console.log('---------------------------');
             const resp = await clobClient.postOrder(signedOrder, 'IOC' as any);
 
             await sleep(ORDER_POST_DELAY);
