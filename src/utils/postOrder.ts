@@ -14,8 +14,8 @@ const RETRY_BACKOFF = 700;
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
      // ================= FETCH MARKET INFO FOR FEES =================
-    const marketInfo = await clobClient.getMarket(trade.asset);
-    const feeRateBps = orderbook.feeRateBps; // dynamic fee with fallback
+    const marketInfo = await ClobClient.getMarketInfo(trade.asset);
+    const feeRateBps = marketInfo.feeRateBps; // dynamic fee with fallback
     console.log('Market feeRateBps:', feeRateBps);
 
 let lastCall = 0;
