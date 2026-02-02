@@ -29,7 +29,7 @@ const fetchTradeData = async () => {
         `https://data-api.polymarket.com/positions?user=${USER_ADDRESS}`
     );
     const user_activities: UserActivityInterface[] = await fetchData(
-        `https://data-api.polymarket.com/activity?user=${USER_ADDRESS}&limit=50&offset=0`
+        `https://data-api.polymarket.com/activity?user=${USER_ADDRESS}&limit=10&offset=0`
     );
 
     await UserPosition.deleteMany({});
