@@ -71,13 +71,14 @@ const postOrder = async (
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             console.log('--- SIGNED ORDER DEBUG ---');
+console.log('--- SIGNED ORDER DEBUG ---');
 console.log('Input makerAmount:', order_args.amount);
 console.log('Input takerAmount (if set):', (order_args as any).takerAmount || 'not provided');
 console.log('Price:', order_args.price);
 console.log('Side:', order_args.side);
 
-console.log('Converted makerAmount (base units):', signedOrder.order.makerAmount);
-console.log('Converted takerAmount (base units):', signedOrder.order.takerAmount);
+console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
+console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
 
 console.log('Full signed order payload:');
 console.log(JSON.stringify(signedOrder, null, 2));
@@ -151,14 +152,15 @@ console.log('---------------------------');
         
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            console.log('--- SIGNED ORDER DEBUG ---');
+        
+console.log('--- SIGNED ORDER DEBUG ---');
 console.log('Input makerAmount:', order_args.amount);
 console.log('Input takerAmount (if set):', (order_args as any).takerAmount || 'not provided');
 console.log('Price:', order_args.price);
 console.log('Side:', order_args.side);
 
-console.log('Converted makerAmount (base units):', signedOrder.order.makerAmount);
-console.log('Converted takerAmount (base units):', signedOrder.order.takerAmount);
+console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
+console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
 
 console.log('Full signed order payload:');
 console.log(JSON.stringify(signedOrder, null, 2));
@@ -234,8 +236,8 @@ console.log('Input takerAmount (if set):', (order_args as any).takerAmount || 'n
 console.log('Price:', order_args.price);
 console.log('Side:', order_args.side);
 
-console.log('Converted makerAmount (base units):', signedOrder.order.makerAmount);
-console.log('Converted takerAmount (base units):', signedOrder.order.takerAmount);
+console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
+console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
 
 console.log('Full signed order payload:');
 console.log(JSON.stringify(signedOrder, null, 2));
