@@ -11,6 +11,14 @@ const MIN_SHARES = 1;
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
+/** ================= COOLDOWN HELPERS ================= **/
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+const ORDERBOOK_COOLDOWN = 400;   // delay between orderbook requests
+const ORDER_POST_COOLDOWN = 700;  // delay after posting orders
+const RETRY_COOLDOWN = 1200;      // delay when retrying failures
+/** ===================================================== **/
+
 const getOrderBookSafe = async (
     clobClient: ClobClient,
     tokenID: string,
@@ -58,6 +66,7 @@ const postOrder = async (
         let remaining = my_position?.size || 0;
 
         while (remaining >= MIN_SHARES && retry < RETRY_LIMIT) {
+            await sleep(ORDERBOOK_COOLDOWN);
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
             if (!orderBook) break;
 
@@ -86,6 +95,7 @@ const postOrder = async (
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            await sleep(ORDER_POST_COOLDOWN);
 
             recordOrder(order_args, resp);
 
@@ -96,6 +106,7 @@ const postOrder = async (
             } else {
                 console.log('Error posting MERGE order, retrying...', resp);
                 retry++;
+                await sleep(RETRY_COOLDOWN);
             }
         }
     }
@@ -107,6 +118,7 @@ const postOrder = async (
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+            await sleep(ORDERBOOK_COOLDOWN);
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
             if (!orderBook) break;
 
@@ -143,6 +155,7 @@ const postOrder = async (
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            await sleep(ORDER_POST_COOLDOWN);
 
             recordOrder(order_args, resp);
 
@@ -153,6 +166,7 @@ const postOrder = async (
             } else {
                 console.log('Error posting BUY order, retrying...', resp);
                 retry++;
+                await sleep(RETRY_COOLDOWN);
             }
         }
     }
@@ -170,6 +184,7 @@ const postOrder = async (
         let remaining = (my_position?.size || 0) * reductionPct;
 
         while (remaining >= MIN_SHARES && retry < RETRY_LIMIT) {
+            await sleep(ORDERBOOK_COOLDOWN);
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
             if (!orderBook) break;
 
@@ -197,6 +212,7 @@ const postOrder = async (
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            await sleep(ORDER_POST_COOLDOWN);
 
             recordOrder(order_args, resp);
 
@@ -207,11 +223,11 @@ const postOrder = async (
             } else {
                 console.log('Error posting SELL order, retrying...', resp);
                 retry++;
+                await sleep(RETRY_COOLDOWN);
             }
         }
     }
 
-    // ================= SUMMARY =================
     console.log('▰▰▰▰▰▰▰ Order Summary ▰▰▰▰▰▰▰');
     console.log('Executed Orders:', executedOrders.length ? executedOrders : 'None');
     console.log('Skipped Orders:', skippedOrders.length ? skippedOrders : 'None');
