@@ -122,16 +122,6 @@ const postOrder = async (
             console.log('Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const rawOrder = (signedOrder as any).order;   // ✅ ADD THIS
-
-console.log('--- SIGNED ORDER DEBUG ---');
-console.log('Input makerAmount:', order_args.amount);
-console.log('Price:', order_args.price);
-console.log('Side:', order_args.side);
-console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
-console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
-console.log(JSON.stringify(signedOrder, null, 2));
-console.log('---------------------------');
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
             await sleep(ORDER_POST_DELAY);
