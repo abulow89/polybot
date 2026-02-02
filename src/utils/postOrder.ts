@@ -97,7 +97,7 @@ const postOrder = async (
                 break;
             }
 const marketInfo = await clobClient.getMarket(trade.asset);
-const takerFeeBps = marketInfo.feeRateBps ?? 1000;
+const takerFeeBps = marketInfo?.feeRateBps ?? 1000;
 
 
             const order_args = {
@@ -160,7 +160,7 @@ const takerFeeBps = marketInfo.feeRateBps ?? 1000;
                 tokenID: trade.asset,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
-                feeRateBps: orderBook.takerFeeBps || 1000
+                feeRateBps: takerFeeBps
             };
 
             console.log('Order args:', order_args);
