@@ -126,13 +126,13 @@ const postOrder = async (
                 console.log('Ask price too far from target — skipping');
                 break;
             }
-
+const priceRounded = parseFloat(askPrice.toFixed(2));
             const order_args = {
                 side: Side.BUY,
                 tokenID: trade.asset,
                 amount: makerAmount,
                 takerAmount: takerAmount,
-                price: askPrice,
+                price: roundedPrice,
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
 
