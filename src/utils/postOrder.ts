@@ -46,16 +46,6 @@ const getOrderBookSafe = async (
     }
 };
 
-        if (err?.response?.status === 429) {
-            console.log('Rate limited. Cooling down...');
-            await sleep(3000);
-            return null;
-        }
-
-        throw err;
-    }
-};
-
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
