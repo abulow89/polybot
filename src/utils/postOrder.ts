@@ -7,7 +7,7 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const MAX_SLIPPAGE = 0.05;
 const PRICE_NUDGE = 0.001;
-const MIN_SHARES = 1;
+const MIN_SHARES = 0.01;
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
