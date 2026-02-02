@@ -23,6 +23,24 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
+    // ================= FETCH MARKET INFO FOR FEES =================
+let feeRateBps: number = 1000;
+try {
+    const market = await clobClient.getMarket(trade.asset);
+    if (!market) {
+        console.warn(`[CLOB] Market not found for ${trade.asset}. Using 1000 fees.`);
+    }
+    feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 1000;
+} catch (err: unknown) {
+    if (process.env.DEBUG_FEES) {
+        if (err instanceof Error) {
+            console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 1000`, err.message);
+        } else {
+            console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 1000`, err);
+        }
+    }
+}
+
     // ================= MERGE =================
     if (condition === 'merge') {
         console.log('Merging Strategy...');
@@ -56,7 +74,7 @@ const postOrder = async (
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
-                feeRateBps: (orderBook as any).takerFeeBps || 1000
+                feeRateBps: feeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -116,7 +134,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps: (orderBook as any).takerFeeBps || 1000
+                feeRateBps: feeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -187,7 +205,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
-                feeRateBps: (orderBook as any).takerFeeBps || 1000
+                feeRateBps: feeRateBps
             };
 
             console.log('Order args:', order_args);
