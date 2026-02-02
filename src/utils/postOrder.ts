@@ -111,10 +111,12 @@ const postOrder = async (
                 break;
             }
 
+            const makerAmount = parseFloat(sharesToBuy.toFixed(4));
+            
             const order_args = {
                 side: Side.BUY,
                 tokenID: trade.asset,
-                amount: sharesToBuy,
+                amount: makerAmount,
                 price: askPrice,
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
