@@ -126,7 +126,6 @@ const postOrder = async (
 
 console.log('--- SIGNED ORDER DEBUG ---');
 console.log('Input makerAmount:', order_args.amount);
-console.log('Input takerAmount:', order_args.takerAmount);
 console.log('Price:', order_args.price);
 console.log('Side:', order_args.side);
 console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
