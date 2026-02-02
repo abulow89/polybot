@@ -114,7 +114,7 @@ const postOrder = async (
             let affordableShares = remainingUSDC / askPrice;
 
             // Maker/Taker rounding for API
-            const makerAmount = parseFloat(Math.max(0.0001, Math.min(affordableShares, parseFloat(minPriceAsk.size))).toFixed(4));
+            const makerAmount = parseFloat(Math.max(0.01, Math.min(affordableShares, parseFloat(minPriceAsk.size))).toFixed(4));
             const takerAmount = parseFloat((makerAmount * askPrice).toFixed(2));
 
             if (takerAmount < 0.01) {
