@@ -106,7 +106,7 @@ try {
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await ClobClient.getOrderBook(trade.asset);
 
             if (!orderBook.asks || orderBook.asks.length === 0) {
                 console.log('No asks found');
