@@ -41,7 +41,7 @@ const postOrder = async (
     // ================= FETCH MARKET INFO FOR FEES =================
 let feeRateBps: number = 0;
 try {
-    const market = await clobClient.getMarket?(trade.asset);
+    const market = await clobClient.getMarket.(trade.asset);
     if (!market) {
         console.warn(`[CLOB] Market not found for ${trade.asset}. Using 0 fees.`);
     }
