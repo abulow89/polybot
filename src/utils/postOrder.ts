@@ -16,6 +16,12 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
+
+     // ================= FETCH MARKET INFO FOR FEES =================
+    const marketInfo = await clobClient.getMarket(trade.asset);
+    const feeRateBps = marketInfo?.getFeeRate ?? 1000; // dynamic fee with fallback
+    console.log('Market feeRateBps:', feeRateBps);
+    
     // ================= MERGE =================
     if (condition === 'merge') {
         console.log('Merging Strategy...');
@@ -47,7 +53,7 @@ const postOrder = async (
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
-                feeRateBps: orderBook.feeRateBps || 1000
+                feeRateBps: feeRateBps
             };
 
             console.log('Order args:', order_args);
@@ -96,9 +102,6 @@ const postOrder = async (
                 console.log('Ask price too far from target — skipping');
                 break;
             }
-const marketInfo = await clobClient.getMarketInfo(trade.asset);
-const takerFeeBps = marketInfo.feeRateBps ?? 1000;
-
 
             const order_args = {
                 side: Side.BUY,
