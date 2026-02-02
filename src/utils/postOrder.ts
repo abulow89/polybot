@@ -131,6 +131,7 @@ const postOrder = async (
                 side: Side.BUY,
                 tokenID: trade.asset,
                 amount: makerAmount,
+                takerAmount: takerAmount,
                 price: askPrice,
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
