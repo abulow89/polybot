@@ -44,7 +44,7 @@ const postOrder = async (
                 break;
             }
 
-            const maxPriceBid = orderBook.bids.reduce((max, current) => 
+            const maxPriceBid = orderBook.bids.reduce((max, current) =>
                 parseFloat(current.price) > parseFloat(max.price) ? current : max
             , orderBook.bids[0]);
 
@@ -62,7 +62,7 @@ const postOrder = async (
             console.log('Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const resp = await clobClient.postOrder(signedOrder, OrderType.IOC); // ✅ IOC here
 
             await sleep(ORDER_POST_DELAY);
 
@@ -82,7 +82,7 @@ const postOrder = async (
     // ================= BUY =================
     else if (condition === 'buy') {
         console.log('Buy Strategy...');
-        const ratio = Math.min(0.02, my_balance / Math.max(user_balance, 1));
+        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
         let retry = 0;
 
@@ -96,7 +96,7 @@ const postOrder = async (
                 break;
             }
 
-            const minPriceAsk = orderBook.asks.reduce((min, current) => 
+            const minPriceAsk = orderBook.asks.reduce((min, current) =>
                 parseFloat(current.price) < parseFloat(min.price) ? current : min
             , orderBook.asks[0]);
 
@@ -122,7 +122,7 @@ const postOrder = async (
             console.log('Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const resp = await clobClient.postOrder(signedOrder, OrderType.IOC); // ✅ IOC here
 
             await sleep(ORDER_POST_DELAY);
 
@@ -164,7 +164,7 @@ const postOrder = async (
                 break;
             }
 
-            const maxPriceBid = orderBook.bids.reduce((max, current) => 
+            const maxPriceBid = orderBook.bids.reduce((max, current) =>
                 parseFloat(current.price) > parseFloat(max.price) ? current : max
             , orderBook.bids[0]);
 
@@ -182,7 +182,7 @@ const postOrder = async (
             console.log('Order args:', order_args);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const resp = await clobClient.postOrder(signedOrder, OrderType.IOC); // ✅ IOC here
 
             await sleep(ORDER_POST_DELAY);
 
