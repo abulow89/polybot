@@ -14,23 +14,6 @@ const ORDER_POST_DELAY = 600;  // delay after posting order
 const RETRY_DELAY = 1200;      // delay when retrying
 // ==================================
 
-// ======== HELPER: Fetch Market ID Dynamically ========
-async function getMarketIDFromAsset(clobClient: ClobClient, asset: string): Promise<string | undefined> {
-    try {
-        const marketsPayload = await clobClient.getMarkets();
-        // TS workaround: force it to "any" to access the array
-        const markets = (marketsPayload as any).data || [];
-        const market = markets.find(
-            (m: any) => m.asset === asset || m.tokenID === asset || m.id === asset
-        );
-        return market?.id;
-    } catch (err) {
-        console.error(`[CLOB] Failed to fetch markets for asset ${asset}`, err);
-        return undefined;
-    }
-}
-// ====================================================
-
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -40,19 +23,11 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
-    // ======== FETCH MARKET ID DYNAMICALLY ========
-    const marketID = await getMarketIDFromAsset(clobClient, trade.asset);
-    if (!marketID) {
-        console.error(`[CLOB] Could not find market ID for asset ${trade.asset}`);
-        await UserActivity.updateOne({ _id: trade._id }, { bot: true });
-        return;
-    }
-
     // ================= FETCH MARKET INFO FOR FEES =================
     let feeRateBps: number = 1000;
 
     try {
-        const market = await clobClient.getMarket(marketID);
+        const market = await clobClient.getMarket(trade.asset);
         if (!market) {
             console.warn(`[CLOB] Market not found for ${trade.asset}. Using 1000 fees.`);
         }
@@ -84,7 +59,7 @@ const postOrder = async (
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(marketID);
+            const orderBook = await clobClient.getOrderBook(trade.asset);
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
@@ -102,7 +77,7 @@ const postOrder = async (
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
             const order_args = {
                 side: Side.SELL,
-                tokenID: marketID,
+                tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: feeRateBps,
@@ -133,13 +108,12 @@ const postOrder = async (
     else if (condition === 'buy') {
         console.log('Buy Strategy...');
         const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-        console.log('ratio', ratio);
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
         let retry = 0;
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(marketID);
+            const orderBook = await clobClient.getOrderBook(trade.asset);
 
             if (!orderBook.asks || orderBook.asks.length === 0) {
                 console.log('No asks found');
@@ -165,7 +139,7 @@ const postOrder = async (
 
             const order_args = {
                 side: Side.BUY,
-                tokenID: marketID,
+                tokenID: trade._id,
                 amount: sharesToBuy,
                 price: askPrice,
                 feeRateBps: feeRateBps,
@@ -222,7 +196,7 @@ const postOrder = async (
         let retry = 0;
         while (remaining > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(marketID);
+            const orderBook = await clobClient.getOrderBook(trade.asset);
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
@@ -239,7 +213,7 @@ const postOrder = async (
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
             const order_args = {
                 side: Side.SELL,
-                tokenID: marketID,
+                tokenID: trade.asset,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: feeRateBps,
