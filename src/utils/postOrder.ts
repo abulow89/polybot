@@ -133,7 +133,7 @@ const postOrder = async (
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
             const sharesToBuy = Math.max(MIN_SHARES, Math.min(maxSharesAtLevel, affordableShares));
-const marketInfo = await clobClient.getMarketInfo(trade.asset);
+const marketInfo = await clobClient.getMarket(trade.asset);
 const takerFeeBps = marketInfo?.takerFeeBps || 1000;
 
             
