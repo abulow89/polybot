@@ -5,7 +5,6 @@ import { getUserActivityModel, getUserPositionModel } from '../models/userHistor
 import fetchData from '../utils/fetchData';
 
 const USER_ADDRESS = ENV.USER_ADDRESS;
-const TOO_OLD_TIMESTAMP = ENV.TOO_OLD_TIMESTAMP;
 const FETCH_INTERVAL = ENV.FETCH_INTERVAL;
 
 if (!USER_ADDRESS) {
@@ -17,52 +16,57 @@ const UserPosition = getUserPositionModel(USER_ADDRESS);
 
 let temp_trades: UserActivityInterface[] = [];
 
+// Load previously seen trades
 const init = async () => {
-    temp_trades = (await UserActivity.find().exec()).map((trade) => trade as UserActivityInterface);
+    temp_trades = (await UserActivity.find().exec()).map(
+        (trade) => trade as UserActivityInterface
+    );
 };
 
+// Fetch the latest trades from the API
 const fetchTradeData = async () => {
     const user_positions: UserPositionInterface[] = await fetchData(
         `https://data-api.polymarket.com/positions?user=${USER_ADDRESS}`
     );
     const user_activities: UserActivityInterface[] = await fetchData(
-        `https://data-api.polymarket.com/activity?user=${USER_ADDRESS}&limit=10&offset=0`
+        `https://data-api.polymarket.com/activity?user=${USER_ADDRESS}&limit=50&offset=0`
     );
 
     await UserPosition.deleteMany({});
     await UserPosition.insertMany(user_positions);
 
     try {
+        // Only keep trades we haven’t seen yet
         const new_trades = user_activities
-            .filter((activity: UserActivityInterface) => {
-                return !temp_trades.some(
-                    (existingActivity: UserActivityInterface) =>
-                        existingActivity.transactionHash === activity.transactionHash
-                );
-            })
-            .filter((activity: UserActivityInterface) => {
-                const currentTimestamp = Math.floor(moment().valueOf() / 1000);
-                return activity.timestamp + TOO_OLD_TIMESTAMP * 60 * 60 > currentTimestamp;     //Fetch user transactions only an hour before
-            })
-            .map((activity: UserActivityInterface) => {
-                return { ...activity, bot: false, botExcutedTime: 0 };
-            })
-            .sort(
-                (a: { timestamp: number }, b: { timestamp: number }) => a.timestamp - b.timestamp
-            );
-        temp_trades = [...temp_trades, ...new_trades];
-        await UserActivity.insertMany(new_trades);
+            .filter(
+                (activity: UserActivityInterface) =>
+                    !temp_trades.some(
+                        (existingActivity) =>
+                            existingActivity.transactionHash === activity.transactionHash
+                    )
+            )
+            .map((activity: UserActivityInterface) => ({
+                ...activity,
+                bot: false,
+                botExcutedTime: 0,
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+        if (new_trades.length > 0) {
+            temp_trades.push(...new_trades);
+            await UserActivity.insertMany(new_trades);
+        }
     } catch (error) {
         console.error('Error inserting new trades:', error);
     }
 };
 
 const tradeMonitor = async () => {
-    console.log('Trade Monitor is running every', FETCH_INTERVAL, 'seconds');
-    await init();    //Load my oders before sever downs
+    await init(); // Load previous trades
+
     while (true) {
-        await fetchTradeData();     //Fetch all user activities
-        await new Promise((resolve) => setTimeout(resolve, FETCH_INTERVAL * 1000));     //Fetch user activities every second
+        await fetchTradeData();
+        await new Promise((resolve) => setTimeout(resolve, FETCH_INTERVAL * 1000));
     }
 };
 
