@@ -64,7 +64,7 @@ const postOrder = async (
 ) => {
 
   // ================= FETCH MARKET INFO FOR FEES =================
-let feeRateBps = 0;
+let feeRateBps: number = 0;
 
 try {
   const market = await clobClient.getMarket(trade.asset);
