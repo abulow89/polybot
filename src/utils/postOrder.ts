@@ -13,10 +13,21 @@ const RETRY_BACKOFF = 700;
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-     // ================= FETCH MARKET INFO FOR FEES =================
-    const marketInfo = await ClobClient.getMarketInfo?(trade.asset);
-    const feeRateBps = marketInfo?.feeRateBps; // dynamic fee with fallback
-    console.log('Market feeRateBps:', feeRateBps);
+   // ================= FETCH MARKET INFO FOR FEES =================
+let feeRateBps = 0;
+
+try {
+  const market = await ClobClient.getMarket(trade.asset);
+  feeRateBps = 
+       market?.makerFeeRateBps ?? 
+       market?.takerFeeRateBps ?? 
+       feeRateBps;
+     
+} catch (err) {
+  if (process.env.DEBUG_FEES) {
+    console.warn("Could not fetch market fee, using 0", err);
+  }
+}
 
 let lastCall = 0;
 const rateLimit = async () => {
