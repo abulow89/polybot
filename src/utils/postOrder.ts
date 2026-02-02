@@ -110,13 +110,13 @@ const postOrder = async (
                 console.log('Ask price too far from target — skipping');
                 break;
             }
-const marketTakerFee = orderBook.takerFeeBps || 1000;
+
             const order_args = {
                 side: Side.BUY,
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps: marketTakerFee,
+                feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
 
             console.log('Order args:', order_args);
