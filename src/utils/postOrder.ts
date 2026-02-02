@@ -19,7 +19,7 @@ const postOrder = async (
 
      // ================= FETCH MARKET INFO FOR FEES =================
     const marketInfo = await clobClient.getMarket(trade.asset);
-    const feeRateBps = marketInfo?.feeRateBps ?? 1000; // dynamic fee with fallback
+    const feeRateBps = marketInfo?.feeRateBps; // dynamic fee with fallback
     console.log('Market feeRateBps:', feeRateBps);
     
     // ================= MERGE =================
