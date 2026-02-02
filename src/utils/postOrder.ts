@@ -112,7 +112,7 @@ const postOrder = async (
             // Allow fractional shares, enforce tiny minimum to avoid zero-size orders
             let sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
             sharesToBuy = Math.floor(sharesToBuy * 100) / 100; // 2 decimal places
-            if (sharesToBuy <= 0) break;
+            if (sharesToBuy <= 0.01) break;
 
             const order_args = {
                 side: Side.BUY,
