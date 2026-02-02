@@ -96,8 +96,8 @@ const postOrder = async (
                 console.log('Ask price too far from target — skipping');
                 break;
             }
-const marketInfo = await clobClient.getMarket(trade.asset);
-const takerFeeBps = marketInfo?.feeRateBps ?? 1000;
+const marketInfo = await clobClient.getMarketInfo(trade.asset);
+const takerFeeBps = marketInfo.feeRateBps ?? 1000;
 
 
             const order_args = {
