@@ -70,6 +70,7 @@ const postOrder = async (
             console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
+            const rawOrder = (signedOrder as any).order;
             console.log('--- SIGNED ORDER DEBUG ---');
 console.log('--- SIGNED ORDER DEBUG ---');
 console.log('Input makerAmount:', order_args.amount);
@@ -152,7 +153,7 @@ console.log('---------------------------');
         
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
-        
+        const rawOrder = (signedOrder as any).order;
 console.log('--- SIGNED ORDER DEBUG ---');
 console.log('Input makerAmount:', order_args.amount);
 console.log('Input takerAmount (if set):', (order_args as any).takerAmount || 'not provided');
@@ -230,6 +231,7 @@ console.log('---------------------------');
             console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
+            const rawOrder = (signedOrder as any).order;
             console.log('--- SIGNED ORDER DEBUG ---');
 console.log('Input makerAmount:', order_args.amount);
 console.log('Input takerAmount (if set):', (order_args as any).takerAmount || 'not provided');
