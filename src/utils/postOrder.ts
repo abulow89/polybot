@@ -88,7 +88,7 @@ const postOrder = async (
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await clobClient.getOrderBook(trade.asset,takerFeeBps);
 
             if (!orderBook.asks || orderBook.asks.length === 0) {
                 console.log('No asks found');
@@ -116,7 +116,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps: (orderBook as any).takerFeeBps || 1000
+                feeRateBps: takerFeeBps
             };
 
             console.log('Order args:', order_args);
