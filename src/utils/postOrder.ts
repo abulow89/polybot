@@ -97,77 +97,85 @@ try {
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
     }
 
-    // ================= BUY =================
-    else if (condition === 'buy') {
-        console.log('Buy Strategy...');
-        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-        let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
-        let retry = 0;
+   // ================= BUY =================
+else if (condition === 'buy') {
+    console.log('Buy Strategy...');
 
-        while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-            await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(trade.asset);
-
-            if (!orderBook.asks || orderBook.asks.length === 0) {
-                console.log('No asks found');
-                await UserActivity.updateOne({ _id: trade._id }, { bot: true });
-                break;
-            }
-
-            const minPriceAsk = orderBook.asks.reduce((min, current) => 
-                parseFloat(current.price) < parseFloat(min.price) ? current : min
-            , orderBook.asks[0]);
-
-            console.log('Min price ask:', minPriceAsk);
-
-            const askPrice = parseFloat(minPriceAsk.price);
-            let affordableShares = remainingUSDC / askPrice;
-            const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
-
-            if (Math.abs(askPrice - trade.price) > 0.05) {
-                console.log('Ask price too far from target — skipping');
-                break;
-            }
-
-            const order_args = {
-                side: Side.BUY,
-                tokenID: trade.asset,
-                amount: sharesToBuy,
-                price: askPrice,
-                feeRateBps: feeRateBps
-            };
-
-            console.log('Order args:', order_args);
-
-            const signedOrder = await clobClient.createMarketOrder(order_args);
-            const rawOrder = (signedOrder as any).order;   // ✅ ADD THIS
-
-            console.log('--- SIGNED ORDER DEBUG ---');
-            console.log('Input makerAmount:', order_args.amount);
-            // Removed the line causing TS error
-            console.log('Price:', order_args.price);
-            console.log('Side:', order_args.side);
-            console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
-            console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
-            console.log(JSON.stringify(signedOrder, null, 2));
-            console.log('---------------------------');
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
-
-            await sleep(ORDER_POST_DELAY);
-
-            if (resp.success) {
-                console.log('Successfully posted order:', resp);
-                remainingUSDC -= sharesToBuy * askPrice;
-                retry = 0;
-            } else {
-                console.log('Error posting order: retrying...', resp);
-                retry++;
-                await sleep(RETRY_DELAY);
-            }
-        }
+    // --- FIX: map asset to valid CLOB market ID ---
+    const marketID = getMarketIDFromAsset(trade.asset); // implement this mapping function
+    if (!marketID) {
+        console.error(`[CLOB] Could not find a market ID for asset ${trade.asset}`);
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+        return;
     }
 
+    const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+    let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
+    let retry = 0;
+
+    while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+        await sleep(ORDERBOOK_DELAY);
+        const orderBook = await clobClient.getOrderBook(marketID); // use mapped marketID
+
+        if (!orderBook.asks || orderBook.asks.length === 0) {
+            console.log('No asks found');
+            await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+            break;
+        }
+
+        const minPriceAsk = orderBook.asks.reduce((min, current) => 
+            parseFloat(current.price) < parseFloat(min.price) ? current : min
+        , orderBook.asks[0]);
+
+        console.log('Min price ask:', minPriceAsk);
+
+        const askPrice = parseFloat(minPriceAsk.price);
+        let affordableShares = remainingUSDC / askPrice;
+        const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+
+        if (Math.abs(askPrice - trade.price) > 0.05) {
+            console.log('Ask price too far from target — skipping');
+            break;
+        }
+
+        const order_args = {
+            side: Side.BUY,
+            tokenID: marketID, // use mapped marketID here
+            amount: sharesToBuy,
+            price: askPrice,
+            feeRateBps: feeRateBps
+        };
+
+        console.log('Order args:', order_args);
+
+        const signedOrder = await clobClient.createMarketOrder(order_args);
+        const rawOrder = (signedOrder as any).order;   // ✅ keep this
+
+        console.log('--- SIGNED ORDER DEBUG ---');
+        console.log('Input makerAmount:', order_args.amount);
+        console.log('Price:', order_args.price);
+        console.log('Side:', order_args.side);
+        console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
+        console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
+        console.log(JSON.stringify(signedOrder, null, 2));
+        console.log('---------------------------');
+
+        const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+
+        await sleep(ORDER_POST_DELAY);
+
+        if (resp.success) {
+            console.log('Successfully posted order:', resp);
+            remainingUSDC -= sharesToBuy * askPrice;
+            retry = 0;
+        } else {
+            console.log('Error posting order: retrying...', resp);
+            retry++;
+            await sleep(RETRY_DELAY);
+        }
+    }
+    await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+}
     // ================= SELL =================
     else if (condition === 'sell') {
         console.log('Sell Strategy...');
