@@ -132,7 +132,7 @@ const priceRounded = parseFloat(askPrice.toFixed(2));
                 tokenID: trade.asset,
                 amount: makerAmount,
                 takerAmount: takerAmount,
-                price: roundedPrice,
+                price: priceRounded,
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
 
