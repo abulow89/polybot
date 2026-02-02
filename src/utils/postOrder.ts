@@ -7,6 +7,13 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
+// ======== COOLDOWN HELPERS ========
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+const ORDERBOOK_DELAY = 350;   // delay before fetching book
+const ORDER_POST_DELAY = 600;  // delay after posting order
+const RETRY_DELAY = 1200;      // delay when retrying
+// ==================================
+
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -28,7 +35,9 @@ const postOrder = async (
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
+            await sleep(ORDERBOOK_DELAY);
             const orderBook = await clobClient.getOrderBook(trade.asset);
+
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
                 await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -55,6 +64,8 @@ const postOrder = async (
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
+            await sleep(ORDER_POST_DELAY);
+
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
                 remaining -= sizeToSell;
@@ -62,6 +73,7 @@ const postOrder = async (
             } else {
                 console.log('Error posting order: retrying...', resp);
                 retry++;
+                await sleep(RETRY_DELAY);
             }
         }
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -75,7 +87,9 @@ const postOrder = async (
         let retry = 0;
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+            await sleep(ORDERBOOK_DELAY);
             const orderBook = await clobClient.getOrderBook(trade.asset);
+
             if (!orderBook.asks || orderBook.asks.length === 0) {
                 console.log('No asks found');
                 await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -110,6 +124,8 @@ const postOrder = async (
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
+            await sleep(ORDER_POST_DELAY);
+
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
                 remainingUSDC -= sharesToBuy * askPrice;
@@ -117,6 +133,7 @@ const postOrder = async (
             } else {
                 console.log('Error posting order: retrying...', resp);
                 retry++;
+                await sleep(RETRY_DELAY);
             }
         }
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -139,7 +156,9 @@ const postOrder = async (
 
         let retry = 0;
         while (remaining > 0 && retry < RETRY_LIMIT) {
+            await sleep(ORDERBOOK_DELAY);
             const orderBook = await clobClient.getOrderBook(trade.asset);
+
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
                 break;
@@ -165,6 +184,8 @@ const postOrder = async (
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
 
+            await sleep(ORDER_POST_DELAY);
+
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
                 remaining -= sizeToSell;
@@ -172,6 +193,7 @@ const postOrder = async (
             } else {
                 console.log('Error posting order: retrying...', resp);
                 retry++;
+                await sleep(RETRY_DELAY);
             }
         }
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
