@@ -65,19 +65,16 @@ const postOrder = async (
 
   // ================= FETCH MARKET INFO FOR FEES =================
 let feeRateBps: number = 0;
-
 try {
-  const market = await clobClient.getMarket(trade.asset);
-
-  feeRateBps =
-    market?.makerFeeRateBps ??
-    market?.takerFeeRateBps ??
-    0;
-
+    const market = await clobClient.getMarket(trade.asset);
+    if (!market) {
+        console.warn(`[CLOB] Market not found for ${trade.asset}. Using 0 fees.`);
+    }
+    feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 0;
 } catch (err) {
-  if (process.env.DEBUG_FEES) {
-    console.warn("Could not fetch market fee, using 0", err);
-  }
+    if (process.env.DEBUG_FEES) {
+        console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 0`, err.message || err);
+    }
 }
    
     // ================= MERGE =================
