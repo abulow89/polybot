@@ -10,6 +10,25 @@ const UserActivity = getUserActivityModel(USER_ADDRESS);
 
 // Helper: get current UTC timestamp
 const getUtcTimestamp = () => Math.floor(Date.now() / 1000);
+// ================= MARKET GUARD =================
+const ensureMarketExists = async (clobClient: ClobClient, tokenID: string) => {
+    try {
+        const market = await clobClient.getMarket(tokenID);
+
+        if (!market) {
+            console.warn(`[MARKET CHECK] Empty market response for ${tokenID}`);
+            return null;
+        }
+
+        console.log(`[MARKET CHECK] Market confirmed for ${tokenID}`);
+        return market;
+    } catch (err: any) {
+        console.warn(`[MARKET CHECK] Market not found on CLOB for ${tokenID}`);
+        return null;
+    }
+};
+// =================================================
+
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;   // delay before fetching book
