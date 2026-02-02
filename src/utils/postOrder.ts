@@ -136,7 +136,7 @@ const priceRounded = parseFloat(askPrice.toFixed(2));
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
 
-            console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
+            
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, 'IOC' as any);
