@@ -96,7 +96,7 @@ const postOrder = async (
 
             const askPrice = parseFloat(minPriceAsk.price);
             let affordableShares = remainingUSDC / askPrice;
-            const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+            const sharesToBuy = Math.max(0.1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
 
             if (Math.abs(askPrice - trade.price) > 0.05) {
                 console.log('Ask price too far from target — skipping');
