@@ -37,11 +37,14 @@ const getOrderBookSafe = async (
     try {
         return await clobClient.getOrderBook(tokenID);
     } catch (err: any) {
-        if (err?.response?.status === 404) {
-            console.log('No CLOB market for token — skipping permanently');
-            await UserActivity.updateOne({ _id: tradeId }, { bot: true });
+        if (err?.response?.status === 429) {
+            console.log('Rate limited. Cooling down...');
+            await sleep(3000);
             return null;
         }
+        throw err; // rethrow other unexpected errors
+    }
+};
 
         if (err?.response?.status === 429) {
             console.log('Rate limited. Cooling down...');
@@ -63,6 +66,20 @@ const postOrder = async (
     user_balance: number
 ) => {
 
+// ================= CHECK MARKET EXISTS =================
+    let marketExists;
+    try {
+        marketExists = await clobClient.getMarket(trade.asset);
+    } catch (err: any) {
+        if (err?.response?.status === 404) {
+            console.log(`[CLOB] Market not found for ${trade.asset}. Skipping trade permanently.`);
+            await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+            return; // exit immediately
+        } else {
+            throw err;
+        }
+    }
+ 
 // ================= FETCH MARKET INFO FOR FEES =================
 let feeRateBps: number = 1000;
 try {
