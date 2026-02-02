@@ -74,6 +74,7 @@ const postOrder = async (
 
             const bidPrice = Math.max(0, parseFloat(bestBid.price) - PRICE_NUDGE);
             const sizeToSell = Math.min(remaining, parseFloat(bestBid.size));
+            
             if (sizeToSell < MIN_SHARES) break;
 
             const order_args = {
@@ -132,12 +133,15 @@ const postOrder = async (
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
             const sharesToBuy = Math.max(MIN_SHARES, Math.min(maxSharesAtLevel, affordableShares));
+const takerFeeBps = (orderBook.takerFeeBps) || 1000; // dynamic fee
 
+            
             const order_args = {
                 side: Side.BUY,
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
+                takerFee: takerFeeBps
             };
             console.log('Order args (BUY):', order_args);
 
