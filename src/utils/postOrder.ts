@@ -76,7 +76,7 @@ const postOrder = async (
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: bidPrice,
-                feeRateBps: orderBook.takerFeeBps || 1000
+                feeRateBps: 1000
             };
 
             console.log('Merge Order args:', order_args);
@@ -135,7 +135,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
-                feeRateBps: orderBook.takerFeeBps || 1000
+                feeRateBps: 1000
             };
 
             console.log('Buy Order args:', order_args);
@@ -194,7 +194,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToSell,
                 price: bidPrice,
-                feeRateBps: orderBook.takerFeeBps || 1000
+                feeRateBps: 1000
             };
 
             console.log('Sell Order args:', order_args);
