@@ -7,13 +7,47 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
+// Helper: sleep for ms
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+// Helper: get current UTC timestamp
+const getUtcTimestamp = () => Math.floor(Date.now() / 1000);
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;   // delay before fetching book
 const ORDER_POST_DELAY = 600;  // delay after posting order
 const RETRY_DELAY = 1200;      // delay when retrying
 // ==================================
+const safePostOrder = async (
+  clobClient: ClobClient,
+  signedOrder: any,
+  orderType: OrderType,
+  maxRetries = 3
+) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const localTs = getUtcTimestamp();
+    console.log(`[Timestamp Check] Attempt ${attempt}: local UTC timestamp = ${localTs}`);
 
+    try {
+      const resp = await clobClient.postOrder(signedOrder, orderType);
+      console.log('[CLOB] Order posted successfully:', resp);
+      return resp;
+    } catch (err: any) {
+      if (err?.data?.error === 'market not found' || err?.status === 404) {
+        console.warn(`[CLOB] Possible timestamp mismatch or market unavailable. Attempt ${attempt} failed.`);
+      } else {
+        console.error('[CLOB] Unexpected error posting order:', err);
+      }
+
+      if (attempt < maxRetries) {
+        console.log(`Retrying after 1s...`);
+        await sleep(1000);
+      } else {
+        console.error('[CLOB] Max retries reached. Order failed.');
+        throw err;
+      }
+    }
+  }
+};
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -112,7 +146,6 @@ const postOrder = async (
         let retry = 0;
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-            await sleep(ORDERBOOK_DELAY);
             const orderBook = await clobClient.getOrderBook(trade.asset);
 
             if (!orderBook.asks || orderBook.asks.length === 0) {
