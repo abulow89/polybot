@@ -18,21 +18,20 @@ const postOrder = async (
 ) => {
     
 // ================= FETCH MARKET INFO FOR FEES =================
-let feeRateBps: number = 0;
+let feeRateBps: number = 1000; // default to 1000 bps if API fails
+
 try {
     const market = await clobClient.getMarket(trade.asset);
-    if (!market) {
-        console.warn(`[CLOB] Market not found for ${trade.asset}. Using 0 fees.`);
+
+    // dynamic fee if available, else default to 1000
+    if (market && 'takerFeeBps' in market) {
+        feeRateBps = (market as any).takerFeeBps ?? 1000;
+    } else if (market && 'takerFeeRateBps' in market) {
+        feeRateBps = (market as any).takerFeeRateBps ?? 1000;
     }
-    feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 0;
+
 } catch (err: unknown) {
-    if (process.env.DEBUG_FEES) {
-        if (err instanceof Error) {
-            console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 0`, err.message);
-        } else {
-            console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 0`, err);
-        }
-    }
+    console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using default 1000`, err);
 }
 
 
@@ -68,7 +67,7 @@ try {
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
-                feeRateBps: ofeeRateBps
+                feeRateBps: feeRateBps
             };
 
             console.log('Order args:', order_args);
