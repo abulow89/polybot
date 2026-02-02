@@ -67,7 +67,7 @@ const postOrder = async (
 let feeRateBps = 0;
 
 try {
-  const market = await ClobClient.getMarket(trade.asset);
+  const market = await ClobClient.getMarketInfo(trade.asset);
   feeRateBps = 
        market?.makerFeeRateBps ?? 
        market?.takerFeeRateBps ?? 
