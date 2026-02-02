@@ -17,7 +17,8 @@ const RETRY_DELAY = 1200;      // delay when retrying
 // ======== HELPER: Fetch Market ID Dynamically ========
 async function getMarketIDFromAsset(clobClient: ClobClient, asset: string): Promise<string | undefined> {
     try {
-        const markets = await clobClient.getMarkets();
+        const marketsPayload = await clobClient.getMarkets();
+        const markets = marketsPayload.results; // ✅ use the actual array
         const market = markets.find(
             (m: any) => m.asset === asset || m.tokenID === asset || m.id === asset
         );
