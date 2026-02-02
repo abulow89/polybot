@@ -8,7 +8,6 @@ const USER_ADDRESS = ENV.USER_ADDRESS;
 const MAX_SLIPPAGE = 0.05;
 const PRICE_NUDGE = 0.001;
 const MIN_SHARES = 1;
-const COOLDOWN_MS = 500; // cooldown between order attempts in milliseconds
 
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
@@ -31,9 +30,6 @@ const getOrderBookSafe = async (
 
 // Helper: round number to decimals
 const round = (value: number, decimals: number) => parseFloat(value.toFixed(decimals));
-
-// Helper: sleep/cooldown
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const postOrder = async (
     clobClient: ClobClient,
@@ -103,8 +99,6 @@ const postOrder = async (
             } else {
                 retry++;
             }
-
-            await sleep(COOLDOWN_MS);
         }
     }
 
@@ -150,8 +144,6 @@ const postOrder = async (
             } else {
                 retry++;
             }
-
-            await sleep(COOLDOWN_MS);
         }
     }
 
@@ -195,8 +187,6 @@ const postOrder = async (
             } else {
                 retry++;
             }
-
-            await sleep(COOLDOWN_MS);
         }
     }
 
