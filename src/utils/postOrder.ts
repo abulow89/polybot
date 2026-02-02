@@ -47,7 +47,7 @@ const postOrder = async (
                 tokenID: my_position.asset,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
-                feeRateBps: orderBook.takerFeeBps || 1000
+                feeRateBps: orderBook.feeRateBps || 1000
             };
 
             console.log('Order args:', order_args);
