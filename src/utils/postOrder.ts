@@ -108,6 +108,7 @@ const postOrder = async (
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             const orderBook = await getOrderBookSafe(clobClient, trade.asset, trade._id.toString());
+            const takerFeeBps = (orderBook as any).takerFeeRateBps || 1000;
             if (!orderBook) break;
 
             if (!orderBook.asks?.length) {
@@ -138,6 +139,7 @@ const postOrder = async (
                 tokenID: trade.asset,
                 amount: sharesToBuy,
                 price: askPrice,
+                feeRateBps: takerFeeBps
             };
             console.log('Order args (BUY):', order_args);
 
