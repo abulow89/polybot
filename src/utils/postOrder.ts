@@ -68,11 +68,12 @@ let feeRateBps: number = 0;
 
 try {
   const market = await clobClient.getMarket(trade.asset);
-  const feeRateBps = 
-       market?.makerFeeRateBps ?? 
-       market?.takerFeeRateBps ?? 
-       feeRateBps;
-     
+
+  feeRateBps =
+    market?.makerFeeRateBps ??
+    market?.takerFeeRateBps ??
+    0;
+
 } catch (err) {
   if (process.env.DEBUG_FEES) {
     console.warn("Could not fetch market fee, using 0", err);
