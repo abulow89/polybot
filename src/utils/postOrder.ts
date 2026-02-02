@@ -139,7 +139,7 @@ const postOrder = async (
 
             const order_args = {
                 side: Side.BUY,
-                tokenID: trade._id,
+                tokenID: trade.asset.toString(),
                 amount: sharesToBuy,
                 price: askPrice,
                 feeRateBps: feeRateBps,
