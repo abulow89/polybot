@@ -14,6 +14,21 @@ const ORDER_POST_DELAY = 600;  // delay after posting order
 const RETRY_DELAY = 1200;      // delay when retrying
 // ==================================
 
+// ======== HELPER: Fetch Market ID Dynamically ========
+async function getMarketIDFromAsset(clobClient: ClobClient, asset: string): Promise<string | undefined> {
+    try {
+        const markets = await clobClient.getMarkets();
+        const market = markets.find(
+            (m: any) => m.asset === asset || m.tokenID === asset || m.id === asset
+        );
+        return market?.id;
+    } catch (err) {
+        console.error(`[CLOB] Failed to fetch markets for asset ${asset}`, err);
+        return undefined;
+    }
+}
+// ====================================================
+
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -23,23 +38,35 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
-    // ================= FETCH MARKET INFO FOR FEES =================
-let feeRateBps: number = 1000;
-try {
-    const market = await clobClient.getMarket(trade.asset);
-    if (!market) {
-        console.warn(`[CLOB] Market not found for ${trade.asset}. Using 1000 fees.`);
+    // ======== FETCH MARKET ID DYNAMICALLY ========
+    const marketID = await getMarketIDFromAsset(clobClient, trade.asset);
+    if (!marketID) {
+        console.error(`[CLOB] Could not find market ID for asset ${trade.asset}`);
+        await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+        return;
     }
-    feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 1000;
-} catch (err: unknown) {
-    if (process.env.DEBUG_FEES) {
-        if (err instanceof Error) {
-            console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 1000`, err.message);
-        } else {
-            console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 1000`, err);
+
+    // ================= FETCH MARKET INFO FOR FEES =================
+    let feeRateBps: number = 1000;
+
+    try {
+        const market = await clobClient.getMarket(marketID);
+        if (!market) {
+            console.warn(`[CLOB] Market not found for ${trade.asset}. Using 1000 fees.`);
+        }
+        feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 1000;
+    } catch (err: unknown) {
+        if (process.env.DEBUG_FEES) {
+            if (err instanceof Error) {
+                console.warn(
+                    `[CLOB] Could not fetch market fee for ${trade.asset}, using 1000`,
+                    err.message
+                );
+            } else {
+                console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 1000`, err);
+            }
         }
     }
-}
 
     // ================= MERGE =================
     if (condition === 'merge') {
@@ -49,12 +76,13 @@ try {
             await UserActivity.updateOne({ _id: trade._id }, { bot: true });
             return;
         }
+
         let remaining = my_position.size;
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await clobClient.getOrderBook(marketID);
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
@@ -62,19 +90,20 @@ try {
                 break;
             }
 
-            const maxPriceBid = orderBook.bids.reduce((max, current) => 
-                parseFloat(current.price) > parseFloat(max.price) ? current : max
-            , orderBook.bids[0]);
+            const maxPriceBid = orderBook.bids.reduce(
+                (max, current) => parseFloat(current.price) > parseFloat(max.price) ? current : max,
+                orderBook.bids[0]
+            );
 
             console.log('Max price bid:', maxPriceBid);
 
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
             const order_args = {
                 side: Side.SELL,
-                tokenID: my_position.asset,
+                tokenID: marketID,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
-                feeRateBps: feeRateBps
+                feeRateBps: feeRateBps,
             };
 
             console.log('Order args:', order_args);
@@ -94,88 +123,84 @@ try {
                 await sleep(RETRY_DELAY);
             }
         }
+
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
     }
 
-   // ================= BUY =================
-else if (condition === 'buy') {
-    console.log('Buy Strategy...');
+    // ================= BUY =================
+    else if (condition === 'buy') {
+        console.log('Buy Strategy...');
+        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+        console.log('ratio', ratio);
+        let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
+        let retry = 0;
 
-    // --- FIX: map asset to valid CLOB market ID ---
-    const marketID = getMarketIDFromAsset(trade.asset); // implement this mapping function
-    if (!marketID) {
-        console.error(`[CLOB] Could not find a market ID for asset ${trade.asset}`);
+        while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+            await sleep(ORDERBOOK_DELAY);
+            const orderBook = await clobClient.getOrderBook(marketID);
+
+            if (!orderBook.asks || orderBook.asks.length === 0) {
+                console.log('No asks found');
+                await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+                break;
+            }
+
+            const minPriceAsk = orderBook.asks.reduce(
+                (min, current) => parseFloat(current.price) < parseFloat(min.price) ? current : min,
+                orderBook.asks[0]
+            );
+
+            console.log('Min price ask:', minPriceAsk);
+
+            const askPrice = parseFloat(minPriceAsk.price);
+            let affordableShares = remainingUSDC / askPrice;
+            const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+
+            if (Math.abs(askPrice - trade.price) > 0.05) {
+                console.log('Ask price too far from target — skipping');
+                break;
+            }
+
+            const order_args = {
+                side: Side.BUY,
+                tokenID: marketID,
+                amount: sharesToBuy,
+                price: askPrice,
+                feeRateBps: feeRateBps,
+            };
+
+            console.log('Order args:', order_args);
+
+            const signedOrder = await clobClient.createMarketOrder(order_args);
+            const rawOrder = (signedOrder as any).order;
+
+            console.log('--- SIGNED ORDER DEBUG ---');
+            console.log('Input makerAmount:', order_args.amount);
+            console.log('Price:', order_args.price);
+            console.log('Side:', order_args.side);
+            console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
+            console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
+            console.log(JSON.stringify(signedOrder, null, 2));
+            console.log('---------------------------');
+
+            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+
+            await sleep(ORDER_POST_DELAY);
+
+            if (resp.success) {
+                console.log('Successfully posted order:', resp);
+                remainingUSDC -= sharesToBuy * askPrice;
+                retry = 0;
+            } else {
+                console.log('Error posting order: retrying...', resp);
+                retry++;
+                await sleep(RETRY_DELAY);
+            }
+        }
+
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
-        return;
     }
 
-    const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-    let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
-    let retry = 0;
-
-    while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-        await sleep(ORDERBOOK_DELAY);
-        const orderBook = await clobClient.getOrderBook(marketID); // use mapped marketID
-
-        if (!orderBook.asks || orderBook.asks.length === 0) {
-            console.log('No asks found');
-            await UserActivity.updateOne({ _id: trade._id }, { bot: true });
-            break;
-        }
-
-        const minPriceAsk = orderBook.asks.reduce((min, current) => 
-            parseFloat(current.price) < parseFloat(min.price) ? current : min
-        , orderBook.asks[0]);
-
-        console.log('Min price ask:', minPriceAsk);
-
-        const askPrice = parseFloat(minPriceAsk.price);
-        let affordableShares = remainingUSDC / askPrice;
-        const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
-
-        if (Math.abs(askPrice - trade.price) > 0.05) {
-            console.log('Ask price too far from target — skipping');
-            break;
-        }
-
-        const order_args = {
-            side: Side.BUY,
-            tokenID: marketID, // use mapped marketID here
-            amount: sharesToBuy,
-            price: askPrice,
-            feeRateBps: feeRateBps
-        };
-
-        console.log('Order args:', order_args);
-
-        const signedOrder = await clobClient.createMarketOrder(order_args);
-        const rawOrder = (signedOrder as any).order;   // ✅ keep this
-
-        console.log('--- SIGNED ORDER DEBUG ---');
-        console.log('Input makerAmount:', order_args.amount);
-        console.log('Price:', order_args.price);
-        console.log('Side:', order_args.side);
-        console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
-        console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
-        console.log(JSON.stringify(signedOrder, null, 2));
-        console.log('---------------------------');
-
-        const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
-
-        await sleep(ORDER_POST_DELAY);
-
-        if (resp.success) {
-            console.log('Successfully posted order:', resp);
-            remainingUSDC -= sharesToBuy * askPrice;
-            retry = 0;
-        } else {
-            console.log('Error posting order: retrying...', resp);
-            retry++;
-            await sleep(RETRY_DELAY);
-        }
-    }
-    await UserActivity.updateOne({ _id: trade._id }, { bot: true });
-}
     // ================= SELL =================
     else if (condition === 'sell') {
         console.log('Sell Strategy...');
@@ -186,6 +211,7 @@ else if (condition === 'buy') {
         }
 
         let remaining = my_position.size;
+
         if (user_position) {
             const ratio = trade.size / (user_position.size + trade.size);
             remaining *= ratio;
@@ -194,26 +220,27 @@ else if (condition === 'buy') {
         let retry = 0;
         while (remaining > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await clobClient.getOrderBook(marketID);
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
                 break;
             }
 
-            const maxPriceBid = orderBook.bids.reduce((max, current) => 
-                parseFloat(current.price) > parseFloat(max.price) ? current : max
-            , orderBook.bids[0]);
+            const maxPriceBid = orderBook.bids.reduce(
+                (max, current) => parseFloat(current.price) > parseFloat(max.price) ? current : max,
+                orderBook.bids[0]
+            );
 
             console.log('Max price bid:', maxPriceBid);
 
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
             const order_args = {
                 side: Side.SELL,
-                tokenID: trade.asset,
+                tokenID: marketID,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
-                feeRateBps: feeRateBps
+                feeRateBps: feeRateBps,
             };
 
             console.log('Order args:', order_args);
@@ -233,6 +260,7 @@ else if (condition === 'buy') {
                 await sleep(RETRY_DELAY);
             }
         }
+
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
     } else {
         console.log('Condition not supported');
