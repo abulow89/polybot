@@ -82,7 +82,7 @@ const postOrder = async (
     // ================= BUY =================
     else if (condition === 'buy') {
         console.log('Buy Strategy...');
-        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+        const ratio = Math.min(0.001, my_balance / Math.max(user_balance, 1));
         let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
         let retry = 0;
 
