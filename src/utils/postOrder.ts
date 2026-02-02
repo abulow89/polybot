@@ -65,7 +65,7 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
-
+  console.log(`${condition.charAt(0).toUpperCase() + condition.slice(1)} Strategy...`);
 // ================= CHECK MARKET EXISTS =================
     let marketExists;
     try {
