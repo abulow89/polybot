@@ -7,8 +7,7 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
-// Helper: sleep for ms
-const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 // Helper: get current UTC timestamp
 const getUtcTimestamp = () => Math.floor(Date.now() / 1000);
 // ======== COOLDOWN HELPERS ========
