@@ -114,7 +114,7 @@ const postOrder = async (
             let affordableShares = remainingUSDC / askPrice;
 
             // Maker/Taker rounding for API
-            const makerAmount = parseFloat(Math.max(0.0001, Math.min(affordableShares, parseFloat(minPriceAsk.size))).toFixed(4));
+            const makerAmount = parseFloat(Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size))).toFixed(4));
             const takerAmount = parseFloat((makerAmount * askPrice).toFixed(2));
 
             if (takerAmount < 0.01) {
@@ -131,11 +131,12 @@ const postOrder = async (
                 side: Side.BUY,
                 tokenID: trade.asset,
                 amount: makerAmount,
+                takerAmount: takerAmount
                 price: askPrice,
                 feeRateBps: (orderBook as any).takerFeeBps || 1000
             };
 
-            console.log('Order args:', order_args, 'TakerAmount:', takerAmount);
+        
 
             const signedOrder = await clobClient.createMarketOrder(order_args);
             const resp = await clobClient.postOrder(signedOrder, 'IOC' as any);
