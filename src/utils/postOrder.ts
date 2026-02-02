@@ -164,9 +164,12 @@ try {
 
             let sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
 
-            // ✅ FIX: allow small fractional shares (not forced to $1)
-            sharesToBuy = parseFloat(sharesToBuy.toFixed(6));
-            if (sharesToBuy <= 0) break;
+
+let sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
+
+// ✅ Convert to integer
+sharesToBuy = Math.floor(sharesToBuy); // drops fractions
+if (sharesToBuy <= 0) break;
 
             const order_args = {
                 side: Side.BUY,
