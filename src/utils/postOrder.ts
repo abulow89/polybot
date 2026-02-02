@@ -13,6 +13,8 @@ const RETRY_BACKOFF = 700;
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
+ 
+
 let lastCall = 0;
 const rateLimit = async () => {
     const now = Date.now();
@@ -60,24 +62,26 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
-    // ================= FETCH MARKET INFO FOR FEES =================
-    let feeRateBps: number = 0;
-    try {
-        const market = await clobClient.getMarket(trade.asset);
-        if (!market) {
-            console.warn(`[CLOB] Market not found for ${trade.asset}. Using 0 fees.`);
-        }
-        feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 0;
-    } catch (err: unknown) {
-        if (process.env.DEBUG_FEES) {
-            if (err instanceof Error) {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 0`, err.message);
-            } else {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 0`, err);
-            }
+
+// ================= FETCH MARKET INFO FOR FEES =================
+let feeRateBps: number = 0;
+try {
+    const market = await clobClient.getMarket(trade.asset);
+    if (!market) {
+        console.warn(`[CLOB] Market not found for ${trade.asset}. Using 0 fees.`);
+    }
+    feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 0;
+} catch (err: unknown) {
+    if (process.env.DEBUG_FEES) {
+        if (err instanceof Error) {
+            console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 0`, err.message);
+        } else {
+            console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 0`, err);
         }
     }
+}
 
+   
     // ================= MERGE =================
     if (condition === 'merge') {
         console.log('Merging Strategy...');
@@ -109,9 +113,7 @@ const postOrder = async (
                 feeRateBps: feeRateBps
             };
 
-            // === FULL ORDER LOGGING (like old code) ===
-            console.log('Max price bid from orderbook:', bestBid);
-            console.log('Order args (before signing):', order_args);
+            console.log('Order args:', order_args);
 
             await rateLimit();
             const signedOrder = await clobClient.createMarketOrder(order_args);
@@ -123,10 +125,11 @@ const postOrder = async (
                 remaining -= sizeToSell;
                 retry = 0;
                 console.log('Successfully posted order:', resp);
+                await sleep(API_COOLDOWN);
             } else {
                 retry++;
-                console.log('Error posting order: retrying...', resp);
                 const delay = API_COOLDOWN + retry * RETRY_BACKOFF;
+                console.log(`Order failed. Retry ${retry}. Cooling ${delay}ms`);
                 await sleep(delay);
             }
         }
@@ -161,9 +164,11 @@ const postOrder = async (
             const maxSharesAtLevel = parseFloat(bestAsk.size);
             const affordableShares = remainingUSDC / askPrice;
 
-            let sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
-            sharesToBuy = Math.floor(sharesToBuy);
-            if (sharesToBuy <= 0) break;
+let sharesToBuy = Math.min(maxSharesAtLevel, affordableShares);
+
+// ✅ Convert to integer
+sharesToBuy = Math.floor(sharesToBuy); // drops fractions
+if (sharesToBuy <= 0) break;
 
             const order_args = {
                 side: Side.BUY,
@@ -173,9 +178,8 @@ const postOrder = async (
                 feeRateBps: feeRateBps
             };
 
-            // === FULL ORDER LOGGING (like old code) ===
-            console.log('Min price ask from orderbook:', bestAsk);
-            console.log('Order args (before signing):', order_args);
+            console.log('Min price ask:', bestAsk);
+            console.log('Order args:', order_args);
 
             await rateLimit();
             const signedOrder = await clobClient.createMarketOrder(order_args);
@@ -187,10 +191,11 @@ const postOrder = async (
                 remainingUSDC -= sharesToBuy * askPrice;
                 retry = 0;
                 console.log('Successfully posted order:', resp);
+                await sleep(API_COOLDOWN);
             } else {
                 retry++;
-                console.log('Error posting order: retrying...', resp);
                 const delay = API_COOLDOWN + retry * RETRY_BACKOFF;
+                console.log(`Order failed. Retry ${retry}. Cooling ${delay}ms`);
                 await sleep(delay);
             }
         }
@@ -232,9 +237,7 @@ const postOrder = async (
                 feeRateBps: feeRateBps
             };
 
-            // === FULL ORDER LOGGING (like old code) ===
-            console.log('Max price bid from orderbook:', bestBid);
-            console.log('Order args (before signing):', order_args);
+            console.log('Order args:', order_args);
 
             await rateLimit();
             const signedOrder = await clobClient.createMarketOrder(order_args);
@@ -246,10 +249,11 @@ const postOrder = async (
                 remaining -= sizeToSell;
                 retry = 0;
                 console.log('Successfully posted order:', resp);
+                await sleep(API_COOLDOWN);
             } else {
                 retry++;
-                console.log('Error posting order: retrying...', resp);
                 const delay = API_COOLDOWN + retry * RETRY_BACKOFF;
+                console.log(`Order failed. Retry ${retry}. Cooling ${delay}ms`);
                 await sleep(delay);
             }
         }
