@@ -3,6 +3,13 @@ import { UserActivityInterface, UserPositionInterface } from '../interfaces/User
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
 
+// ===== EXCHANGE FORMAT HELPERS =====
+const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
+const formatPriceForOrder = (p: number) =>
+    Math.round(clampPrice(p) * 1000) / 1000; // 3 decimals max (safe)
+const formatMakerAmount = (a: number) =>
+    Math.floor(a * 100) / 100; // 2 decimals max
+
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
@@ -110,12 +117,16 @@ const postOrder = async (
 
             console.log('Max price bid:', maxPriceBid);
 
-            const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
+            let sizeToSell = Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)));
+            
+            const priceRaw = parseFloat(maxPriceBid.price);
+            const price = formatPriceForOrder(priceRaw);
+            
             const order_args = {
                 side: Side.SELL,
                 tokenID: tokenId,
                 amount: sizeToSell,
-                price: parseFloat(maxPriceBid.price),
+                price: formatPriceForOrder(effectivePriceRaw),
                 feeRateBps: feeRateBps
             };
 
@@ -164,19 +175,24 @@ const postOrder = async (
 
             console.log('Min price ask:', minPriceAsk);
 
-            const askPrice = Number(parseFloat(minPriceAsk.price).toFixed(2));
-            const targetPrice = Number(trade.price.toFixed(2)); // 🔧 MODIFIED (rounded)
+// FULL PRECISION (strategy math)
+const askPriceRaw = parseFloat(minPriceAsk.price);
+const targetPriceRaw = trade.price;
             const feeMultiplier = 1 + feeRateBps / 10000;
-            const effectivePrice = Math.round(askPrice * feeMultiplier * 100) / 100; // price including fee rounded
+            const effectivePriceRaw = askPriceRaw * feeMultiplier;
                     
-            // Calculate shares we can actually afford including fee
-        let affordableShares = remainingUSDC / effectivePrice;
-        let sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+            let affordableShares = remainingUSDC / effectivePriceRaw;
+            let sharesToBuyRaw = Math.min(affordableShares, parseFloat(minPriceAsk.size));
+// Apply exchange rule at END
+let sharesToBuy = formatMakerAmount(sharesToBuyRaw);
+
+if (sharesToBuy <= 0) break;;
+            
           // ✅ Convert to integer BEFORE creating the signed order
             sharesToBuy = Math.floor(sharesToBuy);
         // =====================================
             
-            if (Math.abs(askPrice - targetPrice) > 0.05) {
+            if (Math.abs(askPriceRaw - targetPriceRaw) > 0.05) {
                 console.log('Ask price too far from target — skipping');
                 break;
             }
@@ -185,7 +201,7 @@ const postOrder = async (
                 side: Side.BUY,
                 tokenID: tokenId,
                 amount: sharesToBuy, // ✅ converted to integer
-                price: effectivePrice,
+                price: formatPriceForOrder(effectivePriceRaw),
                 feeRateBps: feeRateBps
             };
             
@@ -253,13 +269,14 @@ console.log('-------------------');
 
             let sizeToSell = Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)));
             
-            const price = Number(parseFloat(maxPriceBid.price).toFixed(2)); // 🔧 MODIFIED (rounded)
+            const priceRaw = parseFloat(maxPriceBid.price);
+            const price = formatPriceForOrder(priceRaw);
 
             const order_args = {
                 side: Side.SELL,
                 tokenID: tokenId,
                 amount: sizeToSell, // ✅ converted to integer
-                price: price,
+                price: formatPriceForOrder(effectivePriceRaw),
                 feeRateBps: feeRateBps
             };
 
