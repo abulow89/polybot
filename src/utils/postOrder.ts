@@ -9,10 +9,33 @@ const UserActivity = getUserActivityModel(USER_ADDRESS);
 
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
-const ORDERBOOK_DELAY = 350;   // delay before fetching book
-const ORDER_POST_DELAY = 600;  // delay after posting order
-const RETRY_DELAY = 1200;      // delay when retrying
+const ORDERBOOK_DELAY = 350;
+const ORDER_POST_DELAY = 600;
+const RETRY_DELAY = 1200;
 // ==================================
+
+// ========= RPC/API SAFETY WRAPPER =========
+const safeCall = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await fn();
+        } catch (e: any) {
+            const retryable =
+                e?.code === 'CALL_EXCEPTION' ||
+                e?.code === 'SERVER_ERROR' ||
+                e?.message?.includes('missing revert data') ||
+                e?.message?.includes('Internal error') ||
+                e?.message?.includes('timeout');
+
+            if (!retryable || i === retries - 1) throw e;
+
+            console.log(`[RPC RETRY] Attempt ${i + 1} failed, retrying...`);
+            await sleep(600);
+        }
+    }
+    throw new Error('Unreachable safeCall state');
+};
+// ===========================================
 
 const postOrder = async (
     clobClient: ClobClient,
@@ -26,7 +49,7 @@ const postOrder = async (
     // ================= FETCH MARKET INFO FOR FEES =================
     let feeRateBps: number = 1000;
     try {
-        const market = await clobClient.getMarket(trade.asset);
+        const market = await safeCall(() => clobClient.getMarket(trade.asset));
         if (!market) {
             console.warn(`[CLOB] Market not found for ${trade.asset}. Using 1000 fees.`);
         }
@@ -54,7 +77,7 @@ const postOrder = async (
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await safeCall(() => clobClient.getOrderBook(trade.asset));
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
@@ -81,8 +104,8 @@ const postOrder = async (
 
             console.log('Order args:', order_args);
 
-            const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
+            const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
             await sleep(ORDER_POST_DELAY);
 
@@ -108,7 +131,7 @@ const postOrder = async (
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await safeCall(() => clobClient.getOrderBook(trade.asset));
 
             if (!orderBook.asks || orderBook.asks.length === 0) {
                 console.log('No asks found');
@@ -143,8 +166,8 @@ const postOrder = async (
 
             console.log('Order args:', order_args);
 
-            const signedOrder = await clobClient.createMarketOrder(order_args);
-            const rawOrder = (signedOrder as any).order;   // ✅ ADD THIS
+            const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
+            const rawOrder = (signedOrder as any).order;
 
             console.log('--- SIGNED ORDER DEBUG ---');
             console.log('Input makerAmount:', order_args.amount);
@@ -155,7 +178,7 @@ const postOrder = async (
             console.log(JSON.stringify(signedOrder, null, 2));
             console.log('---------------------------');
 
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
             await sleep(ORDER_POST_DELAY);
 
@@ -190,7 +213,7 @@ const postOrder = async (
         let retry = 0;
         while (remaining > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await clobClient.getOrderBook(trade.asset);
+            const orderBook = await safeCall(() => clobClient.getOrderBook(trade.asset));
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
@@ -216,8 +239,8 @@ const postOrder = async (
 
             console.log('Order args:', order_args);
 
-            const signedOrder = await clobClient.createMarketOrder(order_args);
-            const resp = await clobClient.postOrder(signedOrder, OrderType.FOK);
+            const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
+            const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
             await sleep(ORDER_POST_DELAY);
 
