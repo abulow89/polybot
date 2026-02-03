@@ -65,7 +65,7 @@ const postSingleOrder = async (
 ) => {
 
     const amount = Math.max(1, Math.floor(amountRaw));
-
+console.log('Market info:', market);
     const order_args = {
         side,
         tokenID: tokenId,
