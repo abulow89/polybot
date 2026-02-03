@@ -205,18 +205,18 @@ if (sharesToBuy <= 0) break;;
                 feeRateBps: feeRateBps
             };
             
-            const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
-            const rawOrder = signedOrder;
+const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
+const rawOrder = signedOrder;
 
 // --- LOGGING ---
 console.log('--- ORDER DEBUG ---');
 console.log('Order args (input):', order_args);
 console.log('Signed order (rawOrder):', JSON.stringify(rawOrder, null, 2));
-console.log('makerAmount:', (rawOrder as any).makerAmount); // ➕ ADDED safe cast
+console.log('makerAmount:', (rawOrder as any).makerAmount);
 console.log('takerAmount:', (rawOrder as any).takerAmount);
 console.log('-------------------');
 
-            const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
+const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
           if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDER_POST_DELAY, sharesToBuy));
 
