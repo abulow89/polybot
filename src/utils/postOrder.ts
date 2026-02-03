@@ -126,139 +126,141 @@ const postOrder = async (
 
 
 
-    // ======== SELL / MERGE ========
-    if (condition === 'merge' || condition === 'sell') {
-        console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
-        if (!my_position) {
-            console.log('No position to sell/merge');
-            await updateActivity();
-            return;
-        }
-
-        let remaining = my_position.size;
-
-        if (condition === 'sell' && user_position) {
-            const ratio = trade.size / (user_position.size + trade.size);
-            remaining *= ratio;
-        }
-
-        while (remaining > 0 && retry < RETRY_LIMIT) {
-            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
-
-            // 🟢 MODIFIED — safe orderbook fetch
-            let orderBook;
-            try {
-    orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-    if (!orderBook || !orderBook.asks?.length) {
-        console.log(`No orderbook for token ${tokenId}, skipping`);
-        break;
-    }
-} catch (err: any) {
-    if (err.response?.status === 404) {
-        console.log(`Token ${tokenId} has no orderbook yet, skipping`);
-        break;
-    }
-    throw err;
-}
-
-            if (!orderBook.bids?.length) break;
-
-            const maxPriceBid = orderBook.bids.reduce(
-                (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
-                orderBook.bids[0]
-            );
-
-            const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
-
-            const filled = await postSingleOrder(
-                clobClient,
-                Side.SELL,
-                tokenId,
-                sizeToSell,
-                parseFloat(maxPriceBid.price),
-                feeRateBps // 🟢 MODIFIED
-            );
-
-            if (!filled) retry++;
-            else {
-                remaining -= filled;
-                retry = 0;
-            }
-
-            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
-        }
-
+   // ======== SELL / MERGE ========
+if (condition === 'merge' || condition === 'sell') {
+    console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
+    if (!my_position) {
+        console.log('No position to sell/merge');
         await updateActivity();
+        return;
     }
 
+    let remaining = my_position.size;
 
+    if (condition === 'sell' && user_position) {
+        const ratio = trade.size / (user_position.size + trade.size);
+        remaining *= ratio;
+    }
 
-    // ======== BUY ========
-    else if (condition === 'buy') {
-        console.log('Buy Strategy...');
-        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-        let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
-        let retry = 0;
+    while (remaining > 0 && retry < RETRY_LIMIT) {
+        if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
 
-        while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
-
-            // 🟢 MODIFIED — safe orderbook fetch
-            let orderBook;
-            try {
-                orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-            } catch (err) {
-                console.warn('Orderbook fetch failed', err);
+        // 🟢 FIXED — safe orderbook fetch for SELL
+        let orderBook;
+        try {
+            orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+            if (!orderBook || !orderBook.bids?.length) {
+                console.log(`No bids for token ${tokenId}, skipping sell`);
                 break;
             }
-
-            if (!orderBook.asks?.length) break;
-
-            const minPriceAsk = orderBook.asks.reduce(
-                (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
-                orderBook.asks[0]
-            );
-
-            const askPriceRaw = parseFloat(minPriceAsk.price);
-            const askSize = parseFloat(minPriceAsk.size);
-
-            if (isNaN(askSize) || askSize <= 0) break;
-            if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
-
-            let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
-            let sharesToBuy = Math.floor(Math.min(affordableShares, askSize));
-            sharesToBuy = Math.max(1, sharesToBuy);
-
-            console.log('sharesToBuy:', sharesToBuy);
-
-            try {
-    const filled = await postSingleOrder(
-        clobClient,
-        Side.BUY,
-        tokenId,
-        sharesToBuy,
-        askPriceRaw,
-        feeRateBps
-    );
-} catch (err: any) {
-    if (err.response?.data?.error) {
-        console.log(`Order failed: ${err.response.data.error}`);
-    } else {
-        console.log('Order failed:', err.message || err);
-    }
-}
-
-            if (!filled) retry++;
-            else {
-                remainingUSDC -= filled * askPriceRaw * feeMultiplier;
-                retry = 0;
+        } catch (err: any) {
+            if (err.response?.status === 404) {
+                console.log(`Token ${tokenId} has no orderbook yet, skipping`);
+                break;
             }
-
-            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+            throw err;
         }
 
-        await updateActivity();
+        const maxPriceBid = orderBook.bids.reduce(
+            (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
+            orderBook.bids[0]
+        );
+
+        const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
+
+        const filled = await postSingleOrder(
+            clobClient,
+            Side.SELL,
+            tokenId,
+            sizeToSell,
+            parseFloat(maxPriceBid.price),
+            feeRateBps
+        );
+
+        if (!filled) retry++;
+        else {
+            remaining -= filled;
+            retry = 0;
+        }
+
+        if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
     }
+
+    await updateActivity();
+}
+
+    // ======== BUY ========
+else if (condition === 'buy') {
+    console.log('Buy Strategy...');
+    const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+    let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
+    let retry = 0;
+
+    while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+        if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
+
+        // 🟢 FIXED — safe orderbook fetch for BUY
+        let orderBook;
+        try {
+            orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+            if (!orderBook || !orderBook.asks?.length) {
+                console.log(`No asks for token ${tokenId}, skipping buy`);
+                break;
+            }
+        } catch (err: any) {
+            if (err.response?.status === 404) {
+                console.log(`Token ${tokenId} has no orderbook yet, skipping`);
+                break;
+            }
+            throw err;
+        }
+
+        const minPriceAsk = orderBook.asks.reduce(
+            (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
+            orderBook.asks[0]
+        );
+
+        const askPriceRaw = parseFloat(minPriceAsk.price);
+        const askSize = parseFloat(minPriceAsk.size);
+
+        if (isNaN(askSize) || askSize <= 0) break;
+        if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
+
+        let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
+        let sharesToBuy = Math.floor(Math.min(affordableShares, askSize));
+        sharesToBuy = Math.max(1, sharesToBuy);
+
+        console.log('sharesToBuy:', sharesToBuy);
+
+        let filled = 0;
+        try {
+            filled = await postSingleOrder(
+                clobClient,
+                Side.BUY,
+                tokenId,
+                sharesToBuy,
+                askPriceRaw,
+                feeRateBps
+            );
+        } catch (err: any) {
+            if (err.response?.data?.error) {
+                console.log(`Order failed: ${err.response.data.error}`);
+            } else {
+                console.log('Order failed:', err.message || err);
+            }
+        }
+
+        if (!filled) retry++;
+        else {
+            remainingUSDC -= filled * askPriceRaw * feeMultiplier;
+            retry = 0;
+        }
+
+        if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+    }
+
+    await updateActivity();
+}
 
     else {
         console.log('Condition not supported');
