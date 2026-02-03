@@ -152,7 +152,7 @@ const postOrder = async (
             );
 
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
-            const filled = await postSingleOrder(clobClient, Side.SELL, tokenId, sizeToSell, parseFloat(maxPriceBid.price), marketId, trade._id);
+            const filled = await postSingleOrder(clobClient, Side.SELL, tokenId, sizeToSell, parseFloat(maxPriceBid.price), marketId, trade._id.toString());
 
             if (!filled) retry++;
             else {
@@ -194,7 +194,7 @@ const postOrder = async (
             const affordableShares = remainingUSDC / (askPriceRaw * (1 + (await safeCall(() => clobClient.getMarket(marketId))).takerFeeRateBps / 10000));
             const sharesToBuy = Math.min(affordableShares, parseFloat(minPriceAsk.size));
 
-            const filled = await postSingleOrder(clobClient, Side.BUY, tokenId, sharesToBuy, askPriceRaw, marketId, trade._id);
+            const filled = await postSingleOrder(clobClient, Side.BUY, tokenId, sharesToBuy, askPriceRaw, marketId, trade._id.toString());
             if (!filled) retry++;
             else {
                 remainingUSDC -= filled * askPriceRaw * (1 + (await safeCall(() => clobClient.getMarket(marketId))).takerFeeRateBps / 10000);
