@@ -8,8 +8,8 @@ const PRIVATE_KEY = ENV.PRIVATE_KEY;
 const CLOB_HTTP_URL = ENV.CLOB_HTTP_URL;
 
 // ✅ ADD YOUR TWO RPC URLS TO ENV
-const RPC_PRIMARY = ENV.RPC_URL_1;
-const RPC_SECONDARY = ENV.RPC_URL_2;
+const RPC_PRIMARY = ENV.RPC_URL1;
+const RPC_SECONDARY = ENV.RPC_URL2;
 
 const createClobClient = async (): Promise<ClobClient> => {
     const chainId = 137;
