@@ -60,7 +60,7 @@ const doTrading = async (clobClient: ClobClient) => {
             } else {
                 // Unsupported trade type, mark as done
                 await UserActivity.updateOne(
-                    { _id: trade._id },
+                    { _id: trade.asset },
                     { bot: true, botExcutedTime: trade.botExcutedTime + 1 }
                 );
             }
