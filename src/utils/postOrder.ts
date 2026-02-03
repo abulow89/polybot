@@ -126,7 +126,7 @@ const postOrder = async (
                 side: Side.SELL,
                 tokenID: tokenId,
                 amount: sizeToSell,
-                price: Price,
+                price: price,
                 feeRateBps: feeRateBps
             };
 
@@ -276,7 +276,7 @@ console.log('-------------------');
                 side: Side.SELL,
                 tokenID: tokenId,
                 amount: sizeToSell, // ✅ converted to integer
-                price: Price,
+                price: price,
                 feeRateBps: feeRateBps
             };
 
