@@ -147,8 +147,16 @@ const postOrder = async (
 
             console.log('Min price ask:', minPriceAsk);
 
+            const feeMultiplier = 1 + feeRateBps / 10000; // Convert fee bps to multiplier
+        const effectivePrice = askPrice * feeMultiplier; // price including fee
+
             const askPrice = parseFloat(minPriceAsk.price);
-            let affordableShares = remainingUSDC / askPrice;
+            
+            // Calculate shares we can actually afford including fee
+        let affordableShares = remainingUSDC / effectivePrice;
+        const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+        // =====================================
+            
             const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
 
             if (Math.abs(askPrice - trade.price) > 0.05) {
@@ -160,7 +168,7 @@ const postOrder = async (
                 side: Side.BUY,
                 tokenID: trade.conditionId,
                 amount: sharesToBuy,
-                price: askPrice,
+                price: effectivePrice,
                 feeRateBps: feeRateBps
             };
 
@@ -184,7 +192,7 @@ const postOrder = async (
 
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
-                remainingUSDC -= sharesToBuy * askPrice;
+                remainingUSDC -= sharesToBuy * effectivePrice; // subtract total including fee
                 retry = 0;
             } else {
                 console.log('Error posting order: retrying...', resp);
