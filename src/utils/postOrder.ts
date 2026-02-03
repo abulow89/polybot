@@ -182,12 +182,14 @@ const askPrice = parseFloat(minPriceAsk.price);
             const order_args = {
                 side: Side.BUY,
                 tokenID: tokenId,
-                amount: sharesToBuy,
+                amount: Math.floor(sharesToBuy), // ✅ converted to integer
                 price: effectivePrice,
                 feeRateBps: feeRateBps
             };
 
             console.log('Order args:', order_args);
+            console.log('Converted makerAmount (base units):', Math.floor(rawOrder.makerAmount));
+console.log('Converted takerAmount (base units):', Math.floor(rawOrder.takerAmount));
 
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
             const rawOrder = (signedOrder as any).order;
@@ -256,7 +258,7 @@ const askPrice = parseFloat(minPriceAsk.price);
             const order_args = {
                 side: Side.SELL,
                 tokenID: tokenId,
-                amount: sizeToSell,
+                amount: Math.floor(sizeToSell), // ✅ converted to integer
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: feeRateBps
             };
