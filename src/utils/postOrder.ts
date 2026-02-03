@@ -63,7 +63,7 @@ const postSingleOrder = async (
     priceRaw: number,
     feeRateBps: number
 ) => {
-    const amount = Math.max(0.1, Math.floor(amountRaw));
+    const amount = Math.max(1, Math.floor(amountRaw));
 
     const order_args = {
         side,
@@ -228,7 +228,7 @@ const postOrder = async (
 
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
             let sharesToBuy = Math.floor(Math.min(affordableShares, askSize));
-            sharesToBuy = Math.max(1, sharesToBuy);
+            sharesToBuy = Math.max(0.01, sharesToBuy);
 
             console.log('sharesToBuy:', sharesToBuy);
 
