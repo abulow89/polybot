@@ -187,13 +187,12 @@ const askPrice = parseFloat(minPriceAsk.price);
                 feeRateBps: feeRateBps
             };
             
-            const rawOrder = (signedOrder as any).order;
-           console.log('Order args:', order_args);
-           
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
-             console.log('Converted makerAmount (base units):', Math.floor(rawOrder.makerAmount));
-console.log('Converted takerAmount (base units):', Math.floor(rawOrder.takerAmount));
-
+            const rawOrder = (signedOrder as any).order;
+          
+            console.log('Order args:', order_args);
+            console.log('Converted makerAmount (base units):', Math.floor(rawOrder.makerAmount));
+            console.log('Converted takerAmount (base units):', Math.floor(rawOrder.takerAmount));
             console.log('--- SIGNED ORDER DEBUG ---');
             console.log('Input makerAmount:', order_args.amount);
             console.log('Price:', order_args.price);
