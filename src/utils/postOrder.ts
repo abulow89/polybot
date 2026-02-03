@@ -65,7 +65,7 @@ const postSingleOrder = async (
 ) => {
 
     const amount = Math.max(1, Math.floor(amountRaw));
-console.log('Market info:', market);
+
     const order_args = {
         side,
         tokenID: tokenId,
@@ -121,6 +121,7 @@ const postOrder = async (
         console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 0`, err);
         market = { FeeRateBps: 0 };
     }
+    console.log('Market info:', market);
     const feeRateBps = market?.feeRateBps ?? market?.takerFeeRateBps ?? 0;
     const feeMultiplier = 1 + feeRateBps / 10000;
 
