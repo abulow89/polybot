@@ -192,6 +192,11 @@ const postOrder = async (
             }
 
             const affordableShares = remainingUSDC / (askPriceRaw * (1 + (await safeCall(() => clobClient.getMarket(marketId))).takerFeeRateBps / 10000));
+            console.log('remainingUSDC:', remainingUSDC);
+console.log('askPriceRaw:', askPriceRaw);
+console.log('feeMultiplier:', feeMultiplier);
+console.log('effectivePriceRaw:', effectivePriceRaw);
+console.log('minPriceAsk.size:', minPriceAsk.size);
             const sharesToBuy = Math.min(affordableShares, parseFloat(minPriceAsk.size));
 
             const filled = await postSingleOrder(clobClient, Side.BUY, tokenId, sharesToBuy, askPriceRaw, marketId, trade._id.toString());
