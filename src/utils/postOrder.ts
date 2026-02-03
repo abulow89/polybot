@@ -57,9 +57,9 @@ const postOrder = async (
     } catch (err: unknown) {
         if (process.env.DEBUG_FEES) {
             if (err instanceof Error) {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.trade.conditionId}, using 1000`, err.message);
+                console.warn(`[CLOB] Could not fetch market fee for ${trade.conditionId}, using 1000`, err.message);
             } else {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.trade.conditionId}, using 1000`, err);
+                console.warn(`[CLOB] Could not fetch market fee for ${trade.conditionId}, using 1000`, err);
             }
         }
     }
