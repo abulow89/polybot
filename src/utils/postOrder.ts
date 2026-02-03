@@ -121,7 +121,7 @@ const postOrder = async (
         console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 0`, err);
         market = { FeeRateBps: 0 };
     }
-    const feeRateBps = marketId?.FeeRateBps ?? 0;
+    const feeRateBps = marketId?.(FeeRateBps) ?? 0;
     const feeMultiplier = 1 + feeRateBps / 10000;
 
 
