@@ -189,7 +189,12 @@ const askPrice = parseFloat(minPriceAsk.price);
             
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
             const rawOrder = (signedOrder as any).order;
-          
+          // ✅ Convert maker/taker amounts to integers and assign back to order before posting
+rawOrder.makerAmount = Math.floor(rawOrder.makerAmount);
+rawOrder.takerAmount = Math.floor(rawOrder.takerAmount);
+
+            console.log('Converted makerAmount (integer):', rawOrder.makerAmount);
+            console.log('Converted takerAmount (integer):', rawOrder.takerAmount);
             console.log('Order args:', order_args);
             console.log('Converted makerAmount (base units):', Math.floor(rawOrder.makerAmount));
             console.log('Converted takerAmount (base units):', Math.floor(rawOrder.takerAmount));
