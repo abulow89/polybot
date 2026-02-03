@@ -231,14 +231,22 @@ const postOrder = async (
 
             console.log('sharesToBuy:', sharesToBuy);
 
-            const filled = await postSingleOrder(
-                clobClient,
-                Side.BUY,
-                tokenId,
-                sharesToBuy,
-                askPriceRaw,
-                feeRateBps // 🟢 MODIFIED
-            );
+            try {
+    const filled = await postSingleOrder(
+        clobClient,
+        Side.BUY,
+        tokenId,
+        sharesToBuy,
+        askPriceRaw,
+        feeRateBps
+    );
+} catch (err: any) {
+    if (err.response?.data?.error) {
+        console.log(`Order failed: ${err.response.data.error}`);
+    } else {
+        console.log('Order failed:', err.message || err);
+    }
+}
 
             if (!filled) retry++;
             else {
