@@ -195,8 +195,8 @@ const postOrder = async (
 console.log('--- ORDER DEBUG ---');
 console.log('Order args (input):', order_args);
 console.log('Signed order (rawOrder):', JSON.stringify(rawOrder, null, 2));
-console.log('makerAmount (from signedOrder):', rawOrder.makerAmount);
-console.log('takerAmount (from signedOrder):', rawOrder.takerAmount);
+console.log('makerAmount (from signedOrder).order:', rawOrder.makerAmount);
+console.log('takerAmount (from signedOrder).order:', rawOrder.takerAmount);
 console.log('makerAmount:', (rawOrder as any).makerAmount); // ➕ ADDED safe cast
 console.log('takerAmount:', (rawOrder as any).takerAmount);
 console.log('-------------------');
