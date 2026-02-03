@@ -200,20 +200,21 @@ else if (condition === 'buy') {
         if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
 
         // 🟢 FIXED — safe orderbook fetch for BUY
-        let orderBook;
-        try {
-            orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-            if (!orderBook || !orderBook.asks?.length) {
-                console.log(`No asks for token ${tokenId}, skipping buy`);
-                break;
-            }
-        } catch (err: any) {
-            if (err.response?.status === 404) {
-                console.log(`Token ${tokenId} has no orderbook yet, skipping`);
-                break;
-            }
-            throw err;
-        }
+let orderBook;
+try {
+    orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+    console.log('Orderbook fetched:', orderBook); // 👈 add this
+    if (!orderBook || !orderBook.asks?.length) {
+        console.log(`No asks for token ${tokenId}, skipping buy`);
+        break;
+    }
+} catch (err: any) {
+    if (err.response?.status === 404) {
+        console.log(`Token ${tokenId} has no orderbook yet, skipping`);
+        break;
+    }
+    throw err;
+}
 
         const minPriceAsk = orderBook.asks.reduce(
             (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
