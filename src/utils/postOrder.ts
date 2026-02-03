@@ -171,7 +171,9 @@ const askPrice = parseFloat(minPriceAsk.price);
                     
             // Calculate shares we can actually afford including fee
         let affordableShares = remainingUSDC / effectivePrice;
-        const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+        let sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
+          // ✅ Convert to integer BEFORE creating the signed order
+            sharesToBuy = Math.floor(sharesToBuy);
         // =====================================
             
             if (Math.abs(askPrice - trade.price) > 0.05) {
@@ -182,23 +184,20 @@ const askPrice = parseFloat(minPriceAsk.price);
             const order_args = {
                 side: Side.BUY,
                 tokenID: tokenId,
-                amount: Math.floor(sharesToBuy), // ✅ converted to integer
+                amount: sharesToBuy, // ✅ converted to integer
                 price: effectivePrice,
                 feeRateBps: feeRateBps
             };
             
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
             const rawOrder = (signedOrder as any).order;
-          // Convert maker/taker amounts to integers for API
-rawOrder.makerAmount = Math.floor(rawOrder.makerAmount);
-rawOrder.takerAmount = Math.floor(rawOrder.takerAmount);
 
 // --- LOGGING ---
 console.log('--- ORDER DEBUG ---');
 console.log('Order args (input):', order_args);
-console.log('Signed order:', JSON.stringify(signedOrder, null, 2));
-console.log('makerAmount (integer):', rawOrder.makerAmount);
-console.log('takerAmount (integer):', rawOrder.takerAmount);
+console.log('Signed order (rawOrder):', JSON.stringify(rawOrder, null, 2));
+console.log('makerAmount (from signedOrder):', rawOrder.makerAmount);
+console.log('takerAmount (from signedOrder):', rawOrder.takerAmount);
 console.log('Price:', order_args.price);
 console.log('Side:', order_args.side);
 console.log('-------------------');
@@ -254,20 +253,31 @@ console.log('-------------------');
 
             console.log('Max price bid:', maxPriceBid);
 
-            const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
+            let sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
+// ✅ Convert to integer before signing
+sizeToSell = Math.floor(sizeToSell);
+            
             const order_args = {
                 side: Side.SELL,
                 tokenID: tokenId,
-                amount: Math.floor(sizeToSell), // ✅ converted to integer
+                amount: sizeToSell // ✅ converted to integer
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: feeRateBps
             };
 
-            console.log('Order args:', order_args);
-
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
             const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
+            // --- LOGGING ---
+console.log('--- SELL ORDER DEBUG ---');
+console.log('Order args (input):', order_args);
+console.log('Signed order (rawOrder):', JSON.stringify(rawOrder, null, 2));
+console.log('makerAmount (from signedOrder):', rawOrder.makerAmount);
+console.log('takerAmount (from signedOrder):', rawOrder.takerAmount);
+console.log('Price:', order_args.price);
+console.log('Side:', order_args.side);
+console.log('------------------------');
+        
             if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDER_POST_DELAY, sizeToSell));
 
             if (resp.success) {
