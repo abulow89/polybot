@@ -146,19 +146,17 @@ const postOrder = async (
             );
 
             console.log('Min price ask:', minPriceAsk);
-
+            
+const askPrice = parseFloat(minPriceAsk.price);
+           
             const feeMultiplier = 1 + feeRateBps / 10000; // Convert fee bps to multiplier
         const effectivePrice = askPrice * feeMultiplier; // price including fee
-
-            const askPrice = parseFloat(minPriceAsk.price);
-            
+                    
             // Calculate shares we can actually afford including fee
         let affordableShares = remainingUSDC / effectivePrice;
         const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
         // =====================================
             
-            const sharesToBuy = Math.max(1, Math.min(affordableShares, parseFloat(minPriceAsk.size)));
-
             if (Math.abs(askPrice - trade.price) > 0.05) {
                 console.log('Ask price too far from target — skipping');
                 break;
