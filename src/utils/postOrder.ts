@@ -124,6 +124,8 @@ const postOrder = async (
     const feeMultiplier = 1 + feeRateBps / 10000;
     console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
 
+    console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
+    
     // ======== SELL / MERGE ========
     if (condition === 'merge' || condition === 'sell') {
         console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
