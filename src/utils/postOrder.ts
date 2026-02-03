@@ -166,7 +166,7 @@ const postOrder = async (
 
         const targetPrice = Number(trade.price.toFixed(2)); // 🔧 MODIFIED (rounded)
             const feeMultiplier = 1 + feeRateBps / 10000;
-            const effectivePrice = Number((minAskPrice * feeMultiplier).toFixed(2)); // price including fee rounded
+            const effectivePrice = Math.round(askPrice * feeMultiplier * 100) / 100; // price including fee rounded
                     
             // Calculate shares we can actually afford including fee
         let affordableShares = remainingUSDC / effectivePrice;
@@ -175,7 +175,7 @@ const postOrder = async (
             sharesToBuy = Math.floor(sharesToBuy);
         // =====================================
             
-            if (Math.abs(minAskPrice - targetPrice) > 0.05) {
+            if (Math.abs(AskPrice - targetPrice) > 0.05) {
                 console.log('Ask price too far from target — skipping');
                 break;
             }
