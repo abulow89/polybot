@@ -267,7 +267,7 @@ sizeToSell = Math.floor(sizeToSell);
 
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
             const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
-
+const rawOrder = (signedOrder as any).order; // <-- define rawOrder here
             // --- LOGGING ---
 console.log('--- SELL ORDER DEBUG ---');
 console.log('Order args (input):', order_args);
