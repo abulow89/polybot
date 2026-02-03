@@ -63,7 +63,7 @@ const postSingleOrder = async (
     priceRaw: number,
     feeRateBps: number
 ) => {
-    const amount = Math.max(1, Math.floor(amountRaw));
+    const amount = Math.max(0.01, Math.floor(amountRaw));
 
     const order_args = {
         side,
