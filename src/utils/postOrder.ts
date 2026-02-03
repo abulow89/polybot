@@ -163,11 +163,12 @@ const postOrder = async (
             );
 
             console.log('Min price ask:', minPriceAsk);
-            
-const askPrice = parseFloat(minPriceAsk.price);
+
+const rounded = Number(value.toFixed(2));
+        const askPrice = parseFloat(minPriceAsk.price);
            
             const feeMultiplier = 1 + feeRateBps / 10000; // Convert fee bps to multiplier
-        const effectivePrice = askPrice * feeMultiplier; // price including fee
+        const effectivePrice = Number((askPrice * feeMultiplier).toFixed(2)); // price including fee rounded
                     
             // Calculate shares we can actually afford including fee
         let affordableShares = remainingUSDC / effectivePrice;
