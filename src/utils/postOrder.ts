@@ -148,11 +148,18 @@ const postOrder = async (
             // 🟢 MODIFIED — safe orderbook fetch
             let orderBook;
             try {
-                orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-            } catch (err) {
-                console.warn('Orderbook fetch failed', err);
-                break;
-            }
+    orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+    if (!orderBook || !orderBook.asks?.length) {
+        console.log(`No orderbook for token ${tokenId}, skipping`);
+        break;
+    }
+} catch (err: any) {
+    if (err.response?.status === 404) {
+        console.log(`Token ${tokenId} has no orderbook yet, skipping`);
+        break;
+    }
+    throw err;
+}
 
             if (!orderBook.bids?.length) break;
 
