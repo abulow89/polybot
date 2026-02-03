@@ -260,7 +260,7 @@ sizeToSell = Math.floor(sizeToSell);
             const order_args = {
                 side: Side.SELL,
                 tokenID: tokenId,
-                amount: sizeToSell // ✅ converted to integer
+                amount: sizeToSell, // ✅ converted to integer
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: feeRateBps
             };
