@@ -119,12 +119,12 @@ const postOrder = async (
         market = await safeCall(() => clobClient.getMarket(marketId));
     } catch (err) {
         console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 0`, err);
-        market = { FeeRateBps: 0 };
+    market = { taker_base_fee: 0 };
     }
     console.log('Market info:', market);
-    const feeRateBps = market?.feeRateBps ?? market?.takerFeeRateBps ?? 0;
+    const feeRateBps = market?.taker_base_fee ?? 0; //
     const feeMultiplier = 1 + feeRateBps / 10000;
-
+console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
 
 
    // ======== SELL / MERGE ========
