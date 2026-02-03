@@ -46,20 +46,26 @@ const postOrder = async (
     my_balance: number,
     user_balance: number
 ) => {
+
+    // ======== NEW CANONICAL IDS ========
+    const marketId = trade.conditionId; // ✅ ADDED: use for fees / market info
+    const tokenId = trade.asset;        // ✅ ADDED: use for order book & orders
+    // ===================================
+    
     // ================= FETCH MARKET INFO FOR FEES =================
     let feeRateBps: number = 1000;
     try {
-        const market = await safeCall(() => clobClient.getMarket(trade.conditionId));
+        const market = await safeCall(() => clobClient.getMarket(marketId));
         if (!market) {
-            console.warn(`[CLOB] Market not found for ${trade.conditionId}. Using 1000 fees.`);
+            console.warn(`[CLOB] Market not found for ${trade.marketId}. Using 1000 fees.`);
         }
         feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 1000;
     } catch (err: unknown) {
         if (process.env.DEBUG_FEES) {
             if (err instanceof Error) {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.conditionId}, using 1000`, err.message);
+                console.warn(`[CLOB] Could not fetch market fee for ${trade.marketId}, using 1000`, err.message);
             } else {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.conditionId}, using 1000`, err);
+                console.warn(`[CLOB] Could not fetch market fee for ${trade.marketId}, using 1000`, err);
             }
         }
     }
@@ -67,7 +73,7 @@ const postOrder = async (
     // ================= MERGE =================
     if (condition === 'merge') {
         console.log('Merging Strategy...');
-        if (!my_position || my_position.asset !== trade.asset) {
+        if (!my_position || my_position.asset !== tokenId) {
             console.log('No matching position to merge');
             await UserActivity.updateOne({ _id: trade._id }, { bot: true });
             return;
@@ -77,7 +83,7 @@ const postOrder = async (
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await safeCall(() => clobClient.getOrderBook(trade.asset));
+            const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
@@ -96,7 +102,7 @@ const postOrder = async (
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
             const order_args = {
                 side: Side.SELL,
-                tokenID: my_position.asset,
+                tokenID: tokenId,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: feeRateBps
@@ -131,7 +137,7 @@ const postOrder = async (
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await safeCall(() => clobClient.getOrderBook(trade.asset));
+            const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
 
             if (!orderBook.asks || orderBook.asks.length === 0) {
                 console.log('No asks found');
@@ -164,7 +170,7 @@ const askPrice = parseFloat(minPriceAsk.price);
 
             const order_args = {
                 side: Side.BUY,
-                tokenID: trade.conditionId,
+                tokenID: tokenId,
                 amount: sharesToBuy,
                 price: effectivePrice,
                 feeRateBps: feeRateBps
@@ -219,7 +225,7 @@ const askPrice = parseFloat(minPriceAsk.price);
         let retry = 0;
         while (remaining > 0 && retry < RETRY_LIMIT) {
             await sleep(ORDERBOOK_DELAY);
-            const orderBook = await safeCall(() => clobClient.getOrderBook(trade.asset));
+            const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
                 console.log('No bids found');
@@ -237,7 +243,7 @@ const askPrice = parseFloat(minPriceAsk.price);
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
             const order_args = {
                 side: Side.SELL,
-                tokenID: trade.conditionId,
+                tokenID: tokenId,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: feeRateBps
