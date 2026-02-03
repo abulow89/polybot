@@ -53,7 +53,21 @@ const updateExposure = (tokenId: string, side: Side, filled: number) => {
     exposure[tokenId] += side === Side.BUY ? filled : -filled;
     console.log(`[Exposure] Token ${tokenId}: ${exposure[tokenId]} shares`);
 };
+// ======== LOG CURRENT BALANCE / ALLOWANCE ========
+const logBalances = async () => {
+    try {
+        // Fetch balance and allowance from the CLOB client
+        const balance = await safeCall(() => clobClient.getBalance(USER_ADDRESS));
+        const allowance = await safeCall(() => clobClient.getAllowance(USER_ADDRESS));
 
+        console.log(`[Balance] USDC: ${balance.usdc}, Token ${trade.asset}: ${balance.tokens?.[trade.asset] ?? 0}`);
+        console.log(`[Allowance] USDC: ${allowance.usdc}, Token ${trade.asset}: ${allowance.tokens?.[trade.asset] ?? 0}`);
+    } catch (err: any) {
+        console.warn('Could not fetch balance/allowance:', err.message || err);
+    }
+};
+
+await logBalances();
 // ======== HELPER: POST SINGLE ORDER ========
 const postSingleOrder = async (
     clobClient: ClobClient,
