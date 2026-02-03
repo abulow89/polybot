@@ -40,6 +40,6 @@ export const ENV = {
     RETRY_LIMIT: parseInt(process.env.RETRY_LIMIT || '3', 10),
     MONGO_URI: process.env.MONGO_URI as string,
     RPC_URL1: process.env.RPC_URL1 as string,
-     RPC_URL2: process.env.RPC_URL2 as string,
+    RPC_URL2: process.env.RPC_URL2 as string,
     USDC_CONTRACT_ADDRESS: process.env.USDC_CONTRACT_ADDRESS as string,
 };
