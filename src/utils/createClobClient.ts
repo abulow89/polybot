@@ -14,7 +14,17 @@ const RPC_SECONDARY = ENV.RPC_URL2;
 const createClobClient = async (): Promise<ClobClient> => {
     const chainId = 137;
     const host = CLOB_HTTP_URL as string;
-    const wallet = new ethers.Wallet(PRIVATE_KEY as string);
+    
+    const providers = [
+    new ethers.providers.JsonRpcProvider(RPC_PRIMARY, { name: "matic", chainId: 137 }),
+    new ethers.providers.JsonRpcProvider(RPC_SECONDARY, { name: "matic", chainId: 137 })
+];
+
+// Fallback provider = auto failover
+const provider = new ethers.providers.FallbackProvider(providers, 1);
+
+// Attach provider to wallet
+const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
     let clobClient = new ClobClient(
         host,
         chainId,
