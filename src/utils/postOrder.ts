@@ -186,7 +186,7 @@ const targetPriceRaw = trade.price;
 // Apply exchange rule at END
 let sharesToBuy = formatMakerAmount(sharesToBuyRaw);
 
-if (sharesToBuy <= 0) break;;
+if (sharesToBuy <= 1) break;;
             
           // ✅ Convert to integer BEFORE creating the signed order
             sharesToBuy = Math.floor(sharesToBuy);
