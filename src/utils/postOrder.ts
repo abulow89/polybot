@@ -126,7 +126,7 @@ const postOrder = async (
                 side: Side.SELL,
                 tokenID: tokenId,
                 amount: sizeToSell,
-                price: formatPriceForOrder(effectivePriceRaw),
+                price: Price,
                 feeRateBps: feeRateBps
             };
 
@@ -223,7 +223,7 @@ console.log('-------------------');
 
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
-                remainingUSDC -= sharesToBuy * effectivePrice; // subtract total including fee
+                remainingUSDC -= sharesToBuy * effectivePriceRaw;  // subtract total including fee
                 retry = 0;
             } else {
                 console.log('Error posting order: retrying...', resp);
@@ -276,7 +276,7 @@ console.log('-------------------');
                 side: Side.SELL,
                 tokenID: tokenId,
                 amount: sizeToSell, // ✅ converted to integer
-                price: formatPriceForOrder(effectivePriceRaw),
+                price: Price,
                 feeRateBps: feeRateBps
             };
 
