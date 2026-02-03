@@ -7,13 +7,23 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
+const FAST_ATTEMPTS = 2; // number of attempts before cooldown applies
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;
 const ORDER_POST_DELAY = 600;
 const RETRY_DELAY = 1200;
 // ==================================
-
+// ======== ADDED: sleepWithJitter ========
+const sleepWithJitter = async (ms: number) => {
+    const jitter = ms * 0.1 * (Math.random() - 0.5); // ±10% jitter
+    await sleep(ms + jitter);
+};
+// ======== ADDED: adaptiveDelay ========
+const adaptiveDelay = (baseDelay: number, scale: number) => {
+    const factor = Math.min(2, Math.max(0.5, scale / 100)); // scale 0.5x–2x
+    return baseDelay * factor;
+};
 // ========= RPC/API SAFETY WRAPPER =========
 const safeCall = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
     for (let i = 0; i < retries; i++) {
@@ -82,7 +92,8 @@ const postOrder = async (
         let retry = 0;
 
         while (remaining > 0 && retry < RETRY_LIMIT) {
-            await sleep(ORDERBOOK_DELAY);
+            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining)); // only delay after fast attempts
+
             const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
@@ -113,7 +124,7 @@ const postOrder = async (
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
             const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
-            await sleep(ORDER_POST_DELAY);
+            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDER_POST_DELAY, sizeToSell)); // replaced sleep
 
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
@@ -122,7 +133,7 @@ const postOrder = async (
             } else {
                 console.log('Error posting order: retrying...', resp);
                 retry++;
-                await sleep(RETRY_DELAY);
+                if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY); // skip cooldown for first 2 attempts
             }
         }
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -136,7 +147,7 @@ const postOrder = async (
         let retry = 0;
 
         while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-            await sleep(ORDERBOOK_DELAY);
+             if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
             const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
 
             if (!orderBook.asks || orderBook.asks.length === 0) {
@@ -192,7 +203,8 @@ const askPrice = parseFloat(minPriceAsk.price);
 
             const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
-            await sleep(ORDER_POST_DELAY);
+          if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDER_POST_DELAY, sharesToBuy));
+
 
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
@@ -201,7 +213,7 @@ const askPrice = parseFloat(minPriceAsk.price);
             } else {
                 console.log('Error posting order: retrying...', resp);
                 retry++;
-                await sleep(RETRY_DELAY);
+                if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
             }
         }
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
@@ -224,7 +236,7 @@ const askPrice = parseFloat(minPriceAsk.price);
 
         let retry = 0;
         while (remaining > 0 && retry < RETRY_LIMIT) {
-            await sleep(ORDERBOOK_DELAY);
+            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
             const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
 
             if (!orderBook.bids || orderBook.bids.length === 0) {
@@ -254,7 +266,7 @@ const askPrice = parseFloat(minPriceAsk.price);
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
             const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
-            await sleep(ORDER_POST_DELAY);
+            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDER_POST_DELAY, sizeToSell));
 
             if (resp.success) {
                 console.log('Successfully posted order:', resp);
@@ -263,7 +275,7 @@ const askPrice = parseFloat(minPriceAsk.price);
             } else {
                 console.log('Error posting order: retrying...', resp);
                 retry++;
-                await sleep(RETRY_DELAY);
+                if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
             }
         }
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
