@@ -14,21 +14,20 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
-const FAST_ATTEMPTS = 2; // attempts before cooldown
+const FAST_ATTEMPTS = 2;
 
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;
-const ORDER_POST_DELAY = 600;
 const RETRY_DELAY = 1200;
 
 const sleepWithJitter = async (ms: number) => {
-    const jitter = ms * 0.1 * (Math.random() - 0.5); // ±10% jitter
+    const jitter = ms * 0.1 * (Math.random() - 0.5);
     await sleep(ms + jitter);
 };
 
 const adaptiveDelay = (baseDelay: number, scale: number) => {
-    const factor = Math.min(2, Math.max(0.5, scale / 100)); // scale 0.5x–2x
+    const factor = Math.min(2, Math.max(0.5, scale / 100));
     return baseDelay * factor;
 };
 
@@ -41,8 +40,6 @@ const safeCall = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
             const retryable =
                 e?.code === 'CALL_EXCEPTION' ||
                 e?.code === 'SERVER_ERROR' ||
-                e?.message?.includes('missing revert data') ||
-                e?.message?.includes('Internal error') ||
                 e?.message?.includes('timeout');
 
             if (!retryable || i === retries - 1) throw e;
@@ -54,27 +51,19 @@ const safeCall = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
     throw new Error('Unreachable safeCall state');
 };
 
+
+
 // ======== HELPER: POST SINGLE ORDER ========
+// 🟢 MODIFIED: Removed market fetch. Fee now passed in.
 const postSingleOrder = async (
     clobClient: ClobClient,
     side: Side,
     tokenId: string,
     amountRaw: number,
     priceRaw: number,
-    marketId: string,
-    tradeId: string
+    feeRateBps: number // 🟢 ADDED
 ) => {
-    // fetch market fee
-    let feeRateBps = 0;
-    try {
-        const market = await safeCall(() => clobClient.getMarket(marketId));
-        feeRateBps = market?.takerFeeRateBps ?? 0;
-    } catch (err) {
-        console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 0`, err);
-        feeRateBps = 0;
-    }
 
-    // enforce minimum 1 share
     const amount = Math.max(1, Math.floor(amountRaw));
 
     const order_args = {
@@ -97,11 +86,13 @@ const postSingleOrder = async (
 
     const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
-    if (!resp.success) console.log('Error posting order: retrying...', resp);
+    if (!resp.success) console.log('Error posting order:', resp);
     else console.log('Successfully posted order:', resp);
 
     return resp.success ? amount : 0;
 };
+
+
 
 // ======== MAIN POST ORDER FUNCTION ========
 const postOrder = async (
@@ -122,9 +113,20 @@ const postOrder = async (
         await UserActivity.updateOne({ _id: trade._id }, { bot: true });
     };
 
-    const orderBookFetch = async () => await safeCall(() => clobClient.getOrderBook(tokenId));
+    // 🟢 ADDED — FETCH MARKET ONCE (CACHED)
+    let market;
+    try {
+        market = await safeCall(() => clobClient.getMarket(marketId));
+    } catch (err) {
+        console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 0`, err);
+        market = { takerFeeRateBps: 0 };
+    }
+    const feeRateBps = market?.takerFeeRateBps ?? 0;
+    const feeMultiplier = 1 + feeRateBps / 10000;
 
-    // ======== MERGE / SELL LOGIC ========
+
+
+    // ======== SELL / MERGE ========
     if (condition === 'merge' || condition === 'sell') {
         console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
         if (!my_position) {
@@ -143,7 +145,15 @@ const postOrder = async (
         while (remaining > 0 && retry < RETRY_LIMIT) {
             if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
 
-            const orderBook = await orderBookFetch();
+            // 🟢 MODIFIED — safe orderbook fetch
+            let orderBook;
+            try {
+                orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+            } catch (err) {
+                console.warn('Orderbook fetch failed', err);
+                break;
+            }
+
             if (!orderBook.bids?.length) break;
 
             const maxPriceBid = orderBook.bids.reduce(
@@ -152,7 +162,15 @@ const postOrder = async (
             );
 
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
-            const filled = await postSingleOrder(clobClient, Side.SELL, tokenId, sizeToSell, parseFloat(maxPriceBid.price), marketId, trade._id.toString());
+
+            const filled = await postSingleOrder(
+                clobClient,
+                Side.SELL,
+                tokenId,
+                sizeToSell,
+                parseFloat(maxPriceBid.price),
+                feeRateBps // 🟢 MODIFIED
+            );
 
             if (!filled) retry++;
             else {
@@ -166,91 +184,66 @@ const postOrder = async (
         await updateActivity();
     }
 
-    // ======== BUY LOGIC ========
-else if (condition === 'buy') {
-    console.log('Buy Strategy...');
-    const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-    let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
-    let retry = 0;
 
-    while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-        if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
 
-        const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-        if (!orderBook.asks?.length) {
-            console.log('No asks found');
-            break;
+    // ======== BUY ========
+    else if (condition === 'buy') {
+        console.log('Buy Strategy...');
+        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+        let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
+        let retry = 0;
+
+        while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
+
+            // 🟢 MODIFIED — safe orderbook fetch
+            let orderBook;
+            try {
+                orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+            } catch (err) {
+                console.warn('Orderbook fetch failed', err);
+                break;
+            }
+
+            if (!orderBook.asks?.length) break;
+
+            const minPriceAsk = orderBook.asks.reduce(
+                (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
+                orderBook.asks[0]
+            );
+
+            const askPriceRaw = parseFloat(minPriceAsk.price);
+            const askSize = parseFloat(minPriceAsk.size);
+
+            if (isNaN(askSize) || askSize <= 0) break;
+            if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
+
+            let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
+            let sharesToBuy = Math.floor(Math.min(affordableShares, askSize));
+            sharesToBuy = Math.max(1, sharesToBuy);
+
+            console.log('sharesToBuy:', sharesToBuy);
+
+            const filled = await postSingleOrder(
+                clobClient,
+                Side.BUY,
+                tokenId,
+                sharesToBuy,
+                askPriceRaw,
+                feeRateBps // 🟢 MODIFIED
+            );
+
+            if (!filled) retry++;
+            else {
+                remainingUSDC -= filled * askPriceRaw * feeMultiplier;
+                retry = 0;
+            }
+
+            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
         }
 
-        const minPriceAsk = orderBook.asks.reduce(
-            (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
-            orderBook.asks[0]
-        );
-
-        const askPriceRaw = parseFloat(minPriceAsk.price);
-        const targetPriceRaw = trade.price;
-
-        // Skip if price too far from target
-        if (Math.abs(askPriceRaw - targetPriceRaw) > 0.05) {
-            console.log('Ask price too far from target — skipping');
-            break;
-        }
-
-        // Parse ask size safely
-        const askSize = parseFloat(minPriceAsk.size);
-        if (isNaN(askSize) || askSize <= 0) {
-            console.log('Invalid ask size, skipping');
-            break;
-        }
-
-        // Fetch market fee safely
-        let market;
-        try {
-            market = await safeCall(() => clobClient.getMarket(marketId));
-        } catch (err) {
-            console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 0`, err);
-            market = { takerFeeRateBps: 0 };
-        }
-        const feeRateBps = market?.takerFeeRateBps ?? 0;
-        const feeMultiplier = 1 + feeRateBps / 10000;
-
-        // Compute affordable shares safely
-        let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
-        let sharesToBuy = Math.floor(Math.min(affordableShares, askSize));
-        sharesToBuy = Math.max(1, sharesToBuy);
-
-        console.log('remainingUSDC:', remainingUSDC);
-        console.log('askPriceRaw:', askPriceRaw);
-        console.log('feeRateBps:', feeRateBps);
-        console.log('feeMultiplier:', feeMultiplier);
-        console.log('effectivePriceRaw:', askPriceRaw * feeMultiplier);
-        console.log('askSize:', askSize);
-        console.log('sharesToBuy:', sharesToBuy);
-
-        // Post the order
-        const filled = await postSingleOrder(
-            clobClient,
-            Side.BUY,
-            tokenId,
-            sharesToBuy,
-            askPriceRaw,
-            marketId,
-            trade._id.toString()
-        );
-
-        if (!filled) {
-            console.log('No shares filled, retrying...');
-            retry++;
-        } else {
-            remainingUSDC -= filled * askPriceRaw * feeMultiplier;
-            retry = 0;
-        }
-
-        if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+        await updateActivity();
     }
-
-    await UserActivity.updateOne({ _id: trade._id }, { bot: true });
-}
 
     else {
         console.log('Condition not supported');
