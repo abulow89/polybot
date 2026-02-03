@@ -186,7 +186,7 @@ const targetPriceRaw = trade.price;
 // Apply exchange rule at END
 let sharesToBuy = formatMakerAmount(sharesToBuyRaw);
 
-if (sharesToBuy <= 1) break;;
+sharesToBuy = Math.max(1, sharesToBuy);
             
           // ✅ Convert to integer BEFORE creating the signed order
             sharesToBuy = Math.floor(sharesToBuy);
@@ -196,7 +196,7 @@ if (sharesToBuy <= 1) break;;
                 console.log('Ask price too far from target — skipping');
                 break;
             }
-
+      
             const order_args = {
                 side: Side.BUY,
                 tokenID: tokenId,
