@@ -19,8 +19,11 @@ if (!process.env.CLOB_WS_URL) {
 if (!process.env.MONGO_URI) {
     throw new Error('MONGO_URI is not defined');
 }
-if (!process.env.RPC_URL) {
-    throw new Error('RPC_URL is not defined');
+if (!process.env.RPC_URL1) {
+    throw new Error('RPC_URL1 is not defined');
+}
+if (!process.env.RPC_URL2) {
+    throw new Error('RPC_URL2 is not defined');
 }
 if (!process.env.USDC_CONTRACT_ADDRESS) {
     throw new Error('USDC_CONTRACT_ADDRESS is not defined');
@@ -36,6 +39,7 @@ export const ENV = {
     TOO_OLD_TIMESTAMP: parseInt(process.env.TOO_OLD_TIMESTAMP || '24', 10),
     RETRY_LIMIT: parseInt(process.env.RETRY_LIMIT || '3', 10),
     MONGO_URI: process.env.MONGO_URI as string,
-    RPC_URL: process.env.RPC_URL as string,
+    RPC_URL1: process.env.RPC_URL1 as string,
+     RPC_URL2: process.env.RPC_URL2 as string,
     USDC_CONTRACT_ADDRESS: process.env.USDC_CONTRACT_ADDRESS as string,
 };
