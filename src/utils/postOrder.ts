@@ -67,15 +67,15 @@ const postOrder = async (
     try {
         const market = await safeCall(() => clobClient.getMarket(marketId));
         if (!market) {
-            console.warn(`[CLOB] Market not found for ${trade.marketId}. Using 1000 fees.`);
+            console.warn(`[CLOB] Market not found for ${marketId}. Using 1000 fees.`);
         }
         feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 1000;
     } catch (err: unknown) {
         if (process.env.DEBUG_FEES) {
             if (err instanceof Error) {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.marketId}, using 1000`, err.message);
+                console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 1000`, err.message);
             } else {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.marketId}, using 1000`, err);
+                console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 1000`, err);
             }
         }
     }
