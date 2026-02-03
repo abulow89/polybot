@@ -188,11 +188,12 @@ const askPrice = parseFloat(minPriceAsk.price);
             };
 
             console.log('Order args:', order_args);
+            const rawOrder = (signedOrder as any).order;
             console.log('Converted makerAmount (base units):', Math.floor(rawOrder.makerAmount));
 console.log('Converted takerAmount (base units):', Math.floor(rawOrder.takerAmount));
 
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
-            const rawOrder = (signedOrder as any).order;
+            
 
             console.log('--- SIGNED ORDER DEBUG ---');
             console.log('Input makerAmount:', order_args.amount);
