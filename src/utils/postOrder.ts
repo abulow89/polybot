@@ -167,50 +167,90 @@ const postOrder = async (
     }
 
     // ======== BUY LOGIC ========
-    else if (condition === 'buy') {
-        console.log('Buy Strategy...');
-        const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-        let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
+else if (condition === 'buy') {
+    console.log('Buy Strategy...');
+    const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+    let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
+    let retry = 0;
 
-        while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
+    while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+        if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
 
-            const orderBook = await orderBookFetch();
-            if (!orderBook.asks?.length) break;
-
-            const minPriceAsk = orderBook.asks.reduce(
-                (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
-                orderBook.asks[0]
-            );
-
-            const askPriceRaw = parseFloat(minPriceAsk.price);
-            const targetPriceRaw = trade.price;
-
-            if (Math.abs(askPriceRaw - targetPriceRaw) > 0.05) {
-                console.log('Ask price too far from target — skipping');
-                break;
-            }
-
-            const affordableShares = remainingUSDC / (askPriceRaw * (1 + (await safeCall(() => clobClient.getMarket(marketId))).takerFeeRateBps / 10000));
-            console.log('remainingUSDC:', remainingUSDC);
-console.log('askPriceRaw:', askPriceRaw);
-console.log('feeMultiplier:', feeMultiplier);
-console.log('effectivePriceRaw:', effectivePriceRaw);
-console.log('minPriceAsk.size:', minPriceAsk.size);
-            const sharesToBuy = Math.min(affordableShares, parseFloat(minPriceAsk.size));
-
-            const filled = await postSingleOrder(clobClient, Side.BUY, tokenId, sharesToBuy, askPriceRaw, marketId, trade._id.toString());
-            if (!filled) retry++;
-            else {
-                remainingUSDC -= filled * askPriceRaw * (1 + (await safeCall(() => clobClient.getMarket(marketId))).takerFeeRateBps / 10000);
-                retry = 0;
-            }
-
-            if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+        const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+        if (!orderBook.asks?.length) {
+            console.log('No asks found');
+            break;
         }
 
-        await updateActivity();
+        const minPriceAsk = orderBook.asks.reduce(
+            (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
+            orderBook.asks[0]
+        );
+
+        const askPriceRaw = parseFloat(minPriceAsk.price);
+        const targetPriceRaw = trade.price;
+
+        // Skip if price too far from target
+        if (Math.abs(askPriceRaw - targetPriceRaw) > 0.05) {
+            console.log('Ask price too far from target — skipping');
+            break;
+        }
+
+        // Parse ask size safely
+        const askSize = parseFloat(minPriceAsk.size);
+        if (isNaN(askSize) || askSize <= 0) {
+            console.log('Invalid ask size, skipping');
+            break;
+        }
+
+        // Fetch market fee safely
+        let market;
+        try {
+            market = await safeCall(() => clobClient.getMarket(marketId));
+        } catch (err) {
+            console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 0`, err);
+            market = { takerFeeRateBps: 0 };
+        }
+        const feeRateBps = market?.takerFeeRateBps ?? 0;
+        const feeMultiplier = 1 + feeRateBps / 10000;
+
+        // Compute affordable shares safely
+        let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
+        let sharesToBuy = Math.floor(Math.min(affordableShares, askSize));
+        sharesToBuy = Math.max(1, sharesToBuy);
+
+        console.log('remainingUSDC:', remainingUSDC);
+        console.log('askPriceRaw:', askPriceRaw);
+        console.log('feeRateBps:', feeRateBps);
+        console.log('feeMultiplier:', feeMultiplier);
+        console.log('effectivePriceRaw:', askPriceRaw * feeMultiplier);
+        console.log('askSize:', askSize);
+        console.log('sharesToBuy:', sharesToBuy);
+
+        // Post the order
+        const filled = await postSingleOrder(
+            clobClient,
+            Side.BUY,
+            tokenId,
+            sharesToBuy,
+            askPriceRaw,
+            marketId,
+            trade._id.toString()
+        );
+
+        if (!filled) {
+            console.log('No shares filled, retrying...');
+            retry++;
+        } else {
+            remainingUSDC -= filled * askPriceRaw * feeMultiplier;
+            retry = 0;
+        }
+
+        if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
     }
+
+    await UserActivity.updateOne({ _id: trade._id }, { bot: true });
+}
 
     else {
         console.log('Condition not supported');
