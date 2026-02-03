@@ -164,7 +164,8 @@ const postOrder = async (
 
             console.log('Min price ask:', minPriceAsk);
 
-        const targetPrice = Number(trade.price.toFixed(2)); // 🔧 MODIFIED (rounded)
+            const askPrice = Number(parseFloat(minPriceAsk.price).toFixed(2));
+            const targetPrice = Number(trade.price.toFixed(2)); // 🔧 MODIFIED (rounded)
             const feeMultiplier = 1 + feeRateBps / 10000;
             const effectivePrice = Math.round(askPrice * feeMultiplier * 100) / 100; // price including fee rounded
                     
@@ -175,7 +176,7 @@ const postOrder = async (
             sharesToBuy = Math.floor(sharesToBuy);
         // =====================================
             
-            if (Math.abs(AskPrice - targetPrice) > 0.05) {
+            if (Math.abs(askPrice - targetPrice) > 0.05) {
                 console.log('Ask price too far from target — skipping');
                 break;
             }
