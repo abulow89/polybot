@@ -164,7 +164,7 @@ const postOrder = async (
 
             console.log('Min price ask:', minPriceAsk);
 
-        const askPrice = Number(parseFloat(minPriceAsk.price).toFixed(2)); // 🔧 MODIFIED (rounded)
+        const targetPrice = Number(trade.price.toFixed(2)); // 🔧 MODIFIED (rounded)
             const feeMultiplier = 1 + feeRateBps / 10000;
             const effectivePrice = Number((askPrice * feeMultiplier).toFixed(2)); // price including fee rounded
                     
@@ -175,7 +175,7 @@ const postOrder = async (
             sharesToBuy = Math.floor(sharesToBuy);
         // =====================================
             
-            if (Math.abs(askPrice - trade.price) > 0.05) {
+            if (Math.abs(askPrice - targetPrice) > 0.05) {
                 console.log('Ask price too far from target — skipping');
                 break;
             }
@@ -195,8 +195,6 @@ const postOrder = async (
 console.log('--- ORDER DEBUG ---');
 console.log('Order args (input):', order_args);
 console.log('Signed order (rawOrder):', JSON.stringify(rawOrder, null, 2));
-console.log('makerAmount (from signedOrder).order:', rawOrder.makerAmount);
-console.log('takerAmount (from signedOrder).order:', rawOrder.takerAmount);
 console.log('makerAmount:', (rawOrder as any).makerAmount); // ➕ ADDED safe cast
 console.log('takerAmount:', (rawOrder as any).takerAmount);
 console.log('-------------------');
@@ -265,14 +263,14 @@ console.log('-------------------');
             };
 
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
-            const rawOrder = (signedOrder as any).order; // <-- define rawOrder here
+            const rawOrder = signedOrder; // <-- define rawOrder here
             
             // --- LOGGING ---
 console.log('--- SELL ORDER DEBUG ---');
 console.log('Order args (input):', order_args);
 console.log('Signed order (rawOrder):', JSON.stringify(rawOrder, null, 2));
-console.log('makerAmount (from signedOrder):', rawOrder.makerAmount);
-console.log('takerAmount (from signedOrder):', rawOrder.takerAmount);
+console.log('makerAmount:', (rawOrder as any).makerAmount); // ➕ ADDED safe cast
+console.log('takerAmount:', (rawOrder as any).takerAmount);
 console.log('Price:', order_args.price);
 console.log('Side:', order_args.side);
 console.log('------------------------');
