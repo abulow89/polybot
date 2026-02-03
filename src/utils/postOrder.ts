@@ -189,23 +189,19 @@ const askPrice = parseFloat(minPriceAsk.price);
             
             const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
             const rawOrder = (signedOrder as any).order;
-          // ✅ Convert maker/taker amounts to integers and assign back to order before posting
+          // Convert maker/taker amounts to integers for API
 rawOrder.makerAmount = Math.floor(rawOrder.makerAmount);
 rawOrder.takerAmount = Math.floor(rawOrder.takerAmount);
 
-            console.log('Converted makerAmount (integer):', rawOrder.makerAmount);
-            console.log('Converted takerAmount (integer):', rawOrder.takerAmount);
-            console.log('Order args:', order_args);
-            console.log('Converted makerAmount (base units):', Math.floor(rawOrder.makerAmount));
-            console.log('Converted takerAmount (base units):', Math.floor(rawOrder.takerAmount));
-            console.log('--- SIGNED ORDER DEBUG ---');
-            console.log('Input makerAmount:', order_args.amount);
-            console.log('Price:', order_args.price);
-            console.log('Side:', order_args.side);
-            console.log('Converted makerAmount (base units):', rawOrder.makerAmount);
-            console.log('Converted takerAmount (base units):', rawOrder.takerAmount);
-            console.log(JSON.stringify(signedOrder, null, 2));
-            console.log('---------------------------');
+// --- LOGGING ---
+console.log('--- ORDER DEBUG ---');
+console.log('Order args (input):', order_args);
+console.log('Signed order:', JSON.stringify(signedOrder, null, 2));
+console.log('makerAmount (integer):', rawOrder.makerAmount);
+console.log('takerAmount (integer):', rawOrder.takerAmount);
+console.log('Price:', order_args.price);
+console.log('Side:', order_args.side);
+console.log('-------------------');
 
             const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
