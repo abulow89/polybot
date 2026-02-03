@@ -63,34 +63,36 @@ const postSingleOrder = async (
     priceRaw: number,
     feeRateBps: number
 ) => {
-    const amount = Math.max(0.01, Math.floor(amountRaw));
+const amount = Math.max(0.01, Math.floor(amountRaw));
 
-    const order_args = {
-        side,
-        tokenID: tokenId,
-        amount,
-        price: formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000)),
-        feeRateBps
-    };
+const order_args = {
+    side,
+    tokenID: tokenId,
+    amount,
+    price: formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000)),
+    feeRateBps
+};
 
-    console.log('--- ORDER DEBUG ---');
-    console.log('Order args:', order_args);
+console.log('--- ORDER DEBUG ---');
+console.log('Order args:', order_args);
 
-    const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
+// ✅ NOW create the order
+const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
 
-    console.log('Signed order:', JSON.stringify(signedOrder, null, 2));
-    console.log('makerAmount:', (signedOrder as any).makerAmount);
-    console.log('takerAmount:', (signedOrder as any).takerAmount);
-    console.log('-------------------');
+// ✅ NOW these values exist
+console.log('makerAmount:', (signedOrder as any).makerAmount);
+console.log('takerAmount:', (signedOrder as any).takerAmount);
 
-    const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
+const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
 
-    if (!resp.success) console.log('Error posting order:', resp);
-    else console.log('Successfully posted order:', resp);
+if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
+else console.log('Successfully posted order');
 
-    if (resp.success) updateExposure(tokenId, side, amount);
+console.log('-------------------');
 
-    return resp.success ? amount : 0;
+if (resp.success) updateExposure(tokenId, side, amount);
+
+return resp.success ? amount : 0;
 };
 
 // ======== MAIN POST ORDER FUNCTION ========
