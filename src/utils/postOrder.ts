@@ -49,17 +49,17 @@ const postOrder = async (
     // ================= FETCH MARKET INFO FOR FEES =================
     let feeRateBps: number = 1000;
     try {
-        const market = await safeCall(() => clobClient.getMarket(trade.asset));
+        const market = await safeCall(() => clobClient.getMarket(trade.conditionId));
         if (!market) {
-            console.warn(`[CLOB] Market not found for ${trade.asset}. Using 1000 fees.`);
+            console.warn(`[CLOB] Market not found for ${trade.conditionId}. Using 1000 fees.`);
         }
         feeRateBps = market?.makerFeeRateBps ?? market?.takerFeeRateBps ?? 1000;
     } catch (err: unknown) {
         if (process.env.DEBUG_FEES) {
             if (err instanceof Error) {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 1000`, err.message);
+                console.warn(`[CLOB] Could not fetch market fee for ${trade.trade.conditionId}, using 1000`, err.message);
             } else {
-                console.warn(`[CLOB] Could not fetch market fee for ${trade.asset}, using 1000`, err);
+                console.warn(`[CLOB] Could not fetch market fee for ${trade.trade.conditionId}, using 1000`, err);
             }
         }
     }
@@ -158,7 +158,7 @@ const postOrder = async (
 
             const order_args = {
                 side: Side.BUY,
-                tokenID: trade.asset,
+                tokenID: trade.conditionId,
                 amount: sharesToBuy,
                 price: askPrice,
                 feeRateBps: feeRateBps
@@ -231,7 +231,7 @@ const postOrder = async (
             const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
             const order_args = {
                 side: Side.SELL,
-                tokenID: trade.asset,
+                tokenID: trade.conditionId,
                 amount: sizeToSell,
                 price: parseFloat(maxPriceBid.price),
                 feeRateBps: feeRateBps
