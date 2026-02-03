@@ -268,7 +268,7 @@ const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FO
             console.log('Max price bid:', maxPriceBid);
 
             let sizeToSell = Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)));
-            
+            sizeToSell = Math.max(1, sizeToSell);
             const priceRaw = parseFloat(maxPriceBid.price);
             const price = formatPriceForOrder(priceRaw);
 
