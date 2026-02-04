@@ -59,7 +59,7 @@ const CANCEL_THRESHOLD_MS = 5000; // cancel micro-orders older than 5s
 
 const cancelStaleOrders = async (clobClient: ClobClient) => {
     try {
-        const orders = await safeCall(() => clobClient.getUserOrders(USER_ADDRESS));
+        const orders = await safeCall(() => clobClient.getActiveOrders({ user: USER_ADDRESS }));
         const now = Date.now();
         for (const order of orders) {
             const orderAge = now - order.createdAt;
@@ -89,7 +89,7 @@ const amount = Math.max(0.0001, roundShares(amountRaw));
 const order_args = {
     side,
     tokenID: tokenId,
-    amount,
+    size: amount, // ✅ change amount → size
     price: formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000)),
     feeRateBps
 };
