@@ -223,7 +223,7 @@ const postOrder = async (
                 orderBook.bids[0]
             );
 // ✅ MODIFIED: compute takerAmount based on API rules
-            const takerAmount = enforceMinShares(formatTaker(Math.min(remaining, parseFloat(maxPriceBid.size))));
+            const takerAmount = enforceMinShares(formatTakerAmount(Math.min(remaining, parseFloat(maxPriceBid.size))));
 
             const filled = await postSingleOrder(
                 clobClient,
@@ -285,7 +285,7 @@ const postOrder = async (
             if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
             let sharesToBuy = Math.min(affordableShares, askSize);
-                sharesToBuy = enforceMinShares(formatTaker(sharesToBuy));
+                sharesToBuy = enforceMinShares(formatTakerAmount(sharesToBuy));
 
             console.log('sharesToBuy:', sharesToBuy);
 
