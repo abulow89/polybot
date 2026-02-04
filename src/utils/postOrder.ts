@@ -14,6 +14,9 @@ const formatMakerAmount = (a: number) => Math.round(a * 100) / 100; // 2 decimal
 const formatTakerAmount = (a: number) => Math.floor(a * 10000) / 10000; // 4 decimals max
 
 const MIN_SHARES = 0.01;
+// ====== HELPER: MINIMUM AMOUNTS ======
+const MIN_MAKER_AMOUNT = 0.01; // 🔹 added
+const enforceMinMakerAmount = (amount: number) => Math.max(MIN_MAKER_AMOUNT, amount); // 🔹 added
 const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
@@ -106,13 +109,13 @@ const postSingleOrder = async (
   const price = formatPriceForOrder(priceRaw);
   const size = amountRaw;
 
-// ✅ MODIFIED: compute takerAmount first according to API rules
+// ✅ MODIFIED: enforce min taker amount first
   const takerAmount = enforceMinShares(formatTakerAmount(size)); // human-readable, max 4 decimals
 
-  // ✅ MODIFIED: compute makerAmount from takerAmount and price
-  const makerAmount = formatMakerAmount(takerAmount * price); // human-readable, max 2 decimals
+  // ✅ MODIFIED: compute makerAmount from takerAmount and price, enforce min maker amount
+  const makerAmount = enforceMinMakerAmount(formatMakerAmount(takerAmount * price)); // human-readable, max 2 decimals
 
-  // Define notional here
+  // Notional for balance check
   const notional = makerAmount;
 
   // Skip if insufficient balance
