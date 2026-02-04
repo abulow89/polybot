@@ -60,32 +60,7 @@ const updateExposure = (tokenId: string, side: Side, filled: number) => {
     exposure[tokenId] += side === Side.BUY ? filled : -filled;
     console.log(`[Exposure] Token ${tokenId}: ${exposure[tokenId]} shares`);
 };
-// 🔥 ADDED: GTC AUTO-CANCELLATION ENGINE
-const CANCEL_THRESHOLD_MS = 5000; // cancel micro-orders older than 5s
-// ✅ MODIFIED: Added explicit type for orders array, removed unnecessary array creation
-interface ActiveOrder {
-    id: string;
-    tokenID: string;
-    side: Side;
-    size: number;
-    price: number;
-    createdAt: number;
-}
-const cancelStaleOrders = async (clobClient: ClobClient) => {
-    try {
-        // ✅ MODIFIED: Added explicit type for orders array, removed unnecessary array creation
-interface ActiveOrder {
-    id: string;
-    tokenID: string;
-    side: Side;
-    size: number;
-    price: number;
-    createdAt: number;
-}
-    } catch (err) {
-        console.error('Error in cancelStaleOrders:', err);
-    }
-};
+
 // 🔥 ADDED — resilient order creation wrapper
 const createOrderWithRetry = async (
   clobClient: ClobClient,
@@ -121,17 +96,16 @@ const postSingleOrder = async (
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
 
-    // 🔥 ADDED: minimum order size
-    // NEW ✅
+// NEW ✅
     const size = amountRaw;  // ← DO NOT FORCE MIN HERE
     const price = formatPriceForOrder(priceRaw);
 
-  // Convert to exchange base units FIRST
-const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
+// Convert to exchange base units FIRST
+    const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
 
 // Exchange rule: maker = floor(taker * price)
 const makerAmountBase = Math.floor(takerAmountBase * price);
-const notionalUSDC = makerAmountBase / 1e6;
+const notional = makerAmountBase / 1e6; // 🔥 THIS is the USDC notional
 
 // Polymarket rule: marketable BUY orders must be >= $1
 if (side === Side.BUY && notionalUSDC < 1) {
@@ -195,9 +169,6 @@ const makerAmount = fromBaseUnits(makerAmountBase, USDC_DECIMALS);
 
     if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
     else console.log('Successfully posted order');
-
-    if (orderType === OrderType.GTC) await cancelStaleOrders(clobClient);
-    console.log('-------------------');
 
     return resp.success ? takerAmount : 0;
 };
