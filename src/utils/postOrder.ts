@@ -127,8 +127,8 @@ const postSingleOrder = async (
     size: takerAmount, // human-readable, rounded
     price,
     feeRateBps,
-    makerAmount: makerAmount.toFixed(2), // string with 2 decimals
-    takerAmount: takerAmount.toFixed(4), // string with 4 decimals
+    makerAmount: makerAmount, // string with 2 decimals
+    takerAmount: takerAmount, // string with 4 decimals
   };
 
   console.log('===== RAW ORDER DEBUG =====');
