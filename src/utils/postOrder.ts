@@ -4,7 +4,6 @@ import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
 
 // ===== EXCHANGE FORMAT HELPERS =====
-// ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
 
@@ -13,6 +12,9 @@ const formatMakerAmount = (a: number) => Math.round(a * 100) / 100; // 2 decimal
 
 // Taker amount rounding — round down to 4 decimals (max accuracy for API)
 const formatTakerAmount = (a: number) => Math.floor(a * 10000) / 10000; // 4 decimals max
+
+const MIN_SHARES = 0.01;
+const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
@@ -104,19 +106,22 @@ const postSingleOrder = async (
   const price = formatPriceForOrder(priceRaw);
   const size = amountRaw;
 
-  /// Convert to base units for internal calculations
-const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
-const makerAmountBase = Math.floor(takerAmountBase * price); // USDC base units
+  // Convert to base units
+  const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
+  const makerAmountBase = Math.floor(takerAmountBase * price); // USDC base units
 
-// Convert back to human-readable with correct API decimals
-const takerAmount = enforceMinShares(formatTakerAmount(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)));
-const makerAmount = formatMakerAmount(fromBaseUnits(makerAmountBase, USDC_DECIMALS));
+  // Convert back to human-readable with correct API decimals
+  const takerAmount = enforceMinShares(formatTakerAmount(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)));
+  const makerAmount = formatMakerAmount(fromBaseUnits(makerAmountBase, USDC_DECIMALS));
 
+// Define notional here
+  const notional = makerAmount;
+
+  // Skip if insufficient balance
   if (availableBalance !== undefined && notional > availableBalance) {
     console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
     return 0;
   }
-
   const order_args = {
     side,
     tokenID: tokenId,
