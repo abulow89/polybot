@@ -107,11 +107,6 @@ const postSingleOrder = async (
 const makerAmountBase = Math.floor(takerAmountBase * price);
 const notional = makerAmountBase / 1e6; // 🔥 THIS is the USDC notional
 
-// Polymarket rule: marketable BUY orders must be >= $1
-if (side === Side.BUY && notional < 1) {
-    console.log(`[SKIP] Marketable BUY too small: $${notional.toFixed(4)} < $1 minimum`);
-    return 0;
-}
 // Convert back only for logs
 const takerAmount = fromBaseUnits(takerAmountBase, SHARE_DECIMALS);
 const makerAmount = fromBaseUnits(makerAmountBase, USDC_DECIMALS);
@@ -309,10 +304,7 @@ const postOrder = async (
 
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
             let sharesToBuy = Math.min(affordableShares, askSize);
-// Ensure BUY order meets $1 notional minimum
-            if (sharesToBuy * askPriceRaw < 1) {
-               sharesToBuy = 1 / askPriceRaw;
-}
+
             console.log('sharesToBuy:', sharesToBuy);
 
             let filled = 0;
