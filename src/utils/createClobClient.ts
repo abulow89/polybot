@@ -52,7 +52,6 @@ const originalConsoleError = console.error;
     creds,
     SignatureType.POLY_GNOSIS_SAFE,
     PROXY_WALLET as string,
-    provider // ⭐ FIX
     );
     console.log(clobClient);
     return clobClient;
