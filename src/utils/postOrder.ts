@@ -117,7 +117,7 @@ const postSingleOrder = async (
 
     // 🔥 ADDED: minimum order size
     // NEW ✅
-    const size = Math.max(MIN_ORDER_SIZE, amountRaw);
+    const size = amountRaw;  // ← DO NOT FORCE MIN HERE
     const price = formatPriceForOrder(priceRaw);
 // ===== MODIFIED BLOCK: enforce API decimal accuracy =====
     // helper function to round down to specific decimals
