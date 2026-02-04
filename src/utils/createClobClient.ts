@@ -31,30 +31,32 @@ const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
         wallet,
         undefined,
         SignatureType.POLY_GNOSIS_SAFE,
-        PROXY_WALLET as string
+        PROXY_WALLET as string,
+        provider // ⭐ FIX
     );
 
-    const originalConsoleError = console.error;
-    console.error = function () {};
-    let creds = await clobClient.createApiKey();
-    console.error = originalConsoleError;
-    if (creds.key) {
+const originalConsoleError = console.error;
+       console.error = function () {};
+   let creds = await clobClient.createApiKey();
+       console.error = originalConsoleError;
+   if (creds.key) {
         console.log('API Key created', creds);
-    } else {
+   } else {
         creds = await clobClient.deriveApiKey();
         console.log('API Key derived', creds);
     }
 
     clobClient = new ClobClient(
-        host,
-        chainId,
-        wallet,
-        creds,
-        SignatureType.POLY_GNOSIS_SAFE,
-        PROXY_WALLET as string
+    host,
+    chainId,
+    wallet,
+    creds,
+    SignatureType.POLY_GNOSIS_SAFE,
+    PROXY_WALLET as string,
+    provider // ⭐ FIX
     );
     console.log(clobClient);
     return clobClient;
-};
+    };
 
 export default createClobClient;
