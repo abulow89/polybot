@@ -84,9 +84,8 @@ const createOrderWithRetry = async (
     }
   }
 };
-// Minimum 0.01 shares
-const enforceMinShares = (shares: number) => Math.max(0.01, shares);
-// ======== HELPER: POST SINGLE ORDER ========
+
+// ======== HELPER: POST SINGLE ORDER ===================================================================================
 const postSingleOrder = async (
     clobClient: ClobClient,
     side: Side,
@@ -96,20 +95,22 @@ const postSingleOrder = async (
     feeRateBps: number,
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
-
+     const MIN_SHARES = 0.01;
+// Helpers for decimal precision
+  const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
+  const formatTaker = (shares: number) => Math.floor(shares * 10000) / 10000; // 4 decimals max
+  const formatMaker = (amount: number) => Math.floor(amount * 100) / 100;       // 2 decimals max
   // NEW ✅
-    const size = amountRaw;  // ← DO NOT FORCE MIN HERE
-    const price = formatPriceForOrder(priceRaw);
+   const price = formatPriceForOrder(priceRaw);
+   const size = amountRaw;  // ← DO NOT FORCE MIN HERE
+    // Convert to base units for internal calculations
+  const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS); // shares
+  const makerAmountBase = Math.floor(takerAmountBase * price); // USDC in base units
 
-// Convert to exchange base units FIRST
-    const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
-
-// Exchange rule: maker = floor(taker * price)
-const makerAmountBase = Math.floor(takerAmountBase * price);
-const notional = makerAmountBase / 1e6; // 🔥 THIS is the USDC notional
-
-const takerAmount = enforceMinShares(fromBaseUnits(takerAmountBase, SHARE_DECIMALS));
-const makerAmount = fromBaseUnits(makerAmountBase, USDC_DECIMALS);
+  // Convert back to human-readable with correct rounding
+  const takerAmount = enforceMinShares(formatTaker(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)));
+  const makerAmount = formatMaker(fromBaseUnits(makerAmountBase, USDC_DECIMALS));
+  const notional = makerAmount; // in USDC
 
     // Skip if insufficient balance
     if (availableBalance !== undefined && notional > availableBalance) {
