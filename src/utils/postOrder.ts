@@ -112,10 +112,12 @@ const postSingleOrder = async (
     amountRaw: number,
     priceRaw: number,
     feeRateBps: number
+    
 ) => {
 // Round size and price to allowed precision
     const size = Math.max(0.0001, Math.floor(amountRaw * 10000) / 10000); // ✅ MODIFIED: rounding
     const price = formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000));
+    
 // ✅ ADDED: calculate takerAmount (size) and makerAmount (size * price)
     const takerAmount = Math.max(0.0001, Math.floor(size * 10000) / 10000);
     const makerAmount = Math.max(0.01, Math.floor(takerAmount * price * 100) / 100);
@@ -157,7 +159,17 @@ console.log('takerAmount:', (signedOrder as any).takerAmount);
     if (signedOrder) updateExposure(tokenId, side, takerAmount);
     
 const notional = takerAmount * price; // ✅ modified: use takerAmount
-
+// 🔥 NEW: check for minimum order size
+    if (notional < 0.01) {
+        console.log(`[SKIP ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`);
+        return 0;
+    }
+// 🔥 NEW: check for insufficient balance
+    if (availableBalance !== undefined && notional > availableBalance) {
+        console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
+        return 0;
+    }
+    
 const orderType = notional >= 1
     ? OrderType.FOK   // remove liquidity
     : OrderType.GTC;  // add liquidity
