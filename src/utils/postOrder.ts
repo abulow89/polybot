@@ -84,89 +84,64 @@ const createOrderWithRetry = async (
     }
   }
 };
-
+// ======== DECIMAL / MINIMUM SHARE HELPERS ========
+const MIN_SHARES = 0.01;
+const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
+const formatTaker = (shares: number) => Math.floor(shares * 10000) / 10000; // 4 decimals max
+const formatMaker = (amount: number) => Math.floor(amount * 100) / 100;       // 2 decimals max
 // ======== HELPER: POST SINGLE ORDER ===================================================================================
 const postSingleOrder = async (
-    clobClient: ClobClient,
-    side: Side,
-    tokenId: string,
-    amountRaw: number,
-    priceRaw: number,
-    feeRateBps: number,
-    availableBalance?: number // ✅ Added optional balance parameter
+  clobClient: ClobClient,
+  side: Side,
+  tokenId: string,
+  amountRaw: number,
+  priceRaw: number,
+  feeRateBps: number,
+  availableBalance?: number
 ) => {
-     const MIN_SHARES = 0.01;
-// Helpers for decimal precision
-  const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
-  const formatTaker = (shares: number) => Math.floor(shares * 10000) / 10000; // 4 decimals max
-  const formatMaker = (amount: number) => Math.floor(amount * 100) / 100;       // 2 decimals max
-  // NEW ✅
-   const price = formatPriceForOrder(priceRaw);
-   const size = amountRaw;  // ← DO NOT FORCE MIN HERE
-    // Convert to base units for internal calculations
-  const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS); // shares
-  const makerAmountBase = Math.floor(takerAmountBase * price); // USDC in base units
+  const price = formatPriceForOrder(priceRaw);
+  const size = amountRaw;
+
+  // Convert to base units
+  const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
+  const makerAmountBase = Math.floor(takerAmountBase * price);
 
   // Convert back to human-readable with correct rounding
   const takerAmount = enforceMinShares(formatTaker(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)));
   const makerAmount = formatMaker(fromBaseUnits(makerAmountBase, USDC_DECIMALS));
-  const notional = makerAmount; // in USDC
+  const notional = makerAmount;
 
-    // Skip if insufficient balance
-    if (availableBalance !== undefined && notional > availableBalance) {
-        console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
-        return 0;
-    }
+  if (availableBalance !== undefined && notional > availableBalance) {
+    console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
+    return 0;
+  }
 
-    const order_args = {
-        side,
-        tokenID: tokenId,
-        size: takerAmount, // human format still needed
-        price,
-        feeRateBps,
-        makerAmount: makerAmountBase.toString(),
-        takerAmount: takerAmountBase.toString(),
-    };
-// 🔴 RAW DEBUG: exact data to be sent to API
-    console.log('===== RAW ORDER DEBUG =====');
-    console.log('Raw size:', size);
-    console.log('Raw price:', price);
-    console.log('Notional:', notional.toFixed(6));
-    console.log('Order args to API:', JSON.stringify(order_args, null, 2));
-    console.log('===========================');
-    console.log('--- ORDER DEBUG ---');
-    console.log('Order args:', order_args);
-    console.log('makerAmountBase:', makerAmountBase);
-    console.log('takerAmountBase:', takerAmountBase);
-    
-    try {
-        const net = await (clobClient as any).provider.getNetwork();
-        console.log("RPC Network:", net.chainId);
-    } catch (e) {
-        console.log("RPC network check failed", e);
-    }
+  const order_args = {
+    side,
+    tokenID: tokenId,
+    size: takerAmount, // human-readable, rounded
+    price,
+    feeRateBps,
+    makerAmount: formatMaker(fromBaseUnits(makerAmountBase, USDC_DECIMALS)).toString(), // 2 decimals
+    takerAmount: formatTaker(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)).toString(), // 4 decimals
+  };
 
-    const signedOrder = await createOrderWithRetry(clobClient, order_args);
-    if (!signedOrder) {
-        console.log('Order creation failed — signedOrder undefined');
-        return 0;
-    }
+  console.log('===== RAW ORDER DEBUG =====');
+  console.log('Order args:', order_args);
+  console.log('makerAmountBase:', makerAmountBase);
+  console.log('takerAmountBase:', takerAmountBase);
 
-    console.log('makerAmount:', (signedOrder as any).makerAmount);
-    console.log('takerAmount:', (signedOrder as any).takerAmount);
+  const signedOrder = await createOrderWithRetry(clobClient, order_args);
+  if (!signedOrder) return 0;
 
-    // Update exposure
-    updateExposure(tokenId, side, takerAmount);
+  updateExposure(tokenId, side, takerAmount);
+  const orderType = OrderType.FOK;
 
-    const orderType = OrderType.FOK; 
-    console.log(`[OrderType] ${orderType} | Notional: $${notional.toFixed(3)}`);
+  const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
+  if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
+  else console.log('Successfully posted order');
 
-    const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
-
-    if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
-    else console.log('Successfully posted order');
-
-    return resp.success ? takerAmount : 0;
+  return resp.success ? takerAmount : 0;
 };
 
 // ======== MAIN POST ORDER FUNCTION ========
@@ -242,9 +217,7 @@ const postOrder = async (
                 orderBook.bids[0]
             );
 // ✅ MODIFIED: compute takerAmount based on API rules
-            const takerAmount = enforceMinShares(
-                  Math.max(0.0001, Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)) * 10000) / 10000)
-                );
+            const takerAmount = enforceMinShares(formatTaker(Math.min(remaining, parseFloat(maxPriceBid.size))));
 
             const filled = await postSingleOrder(
                 clobClient,
@@ -306,7 +279,7 @@ const postOrder = async (
             if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
             let sharesToBuy = Math.min(affordableShares, askSize);
-                sharesToBuy = enforceMinShares(sharesToBuy);
+                sharesToBuy = enforceMinShares(formatTaker(sharesToBuy));
 
             console.log('sharesToBuy:', sharesToBuy);
 
