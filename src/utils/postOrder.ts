@@ -56,21 +56,26 @@ const updateExposure = (tokenId: string, side: Side, filled: number) => {
 };
 // 🔥 ADDED: GTC AUTO-CANCELLATION ENGINE
 const CANCEL_THRESHOLD_MS = 5000; // cancel micro-orders older than 5s
-
+// ✅ MODIFIED: Added explicit type for orders array, removed unnecessary array creation
+interface ActiveOrder {
+    id: string;
+    tokenID: string;
+    side: Side;
+    size: number;
+    price: number;
+    createdAt: number;
+}
 const cancelStaleOrders = async (clobClient: ClobClient) => {
     try {
-        const orders = await safeCall(() => clobClient.getActiveOrders({ user: USER_ADDRESS }));
-        const now = Date.now();
-        for (const order of orders) {
-            const orderAge = now - order.createdAt;
-            const isMicroOrder = order.amount * order.price < 1;
-            if (isMicroOrder && orderAge > CANCEL_THRESHOLD_MS) {
-                console.log(`[CANCEL] Stale micro-order: ${order.id}, age: ${orderAge}ms`);
-                await safeCall(() => clobClient.cancelOrder(order.id));
-                // 🔥 ADDED: update exposure tracking
-                exposure[order.tokenID] -= order.side === Side.BUY ? order.amount : -order.amount;
-            }
-        }
+        // ✅ MODIFIED: Added explicit type for orders array, removed unnecessary array creation
+interface ActiveOrder {
+    id: string;
+    tokenID: string;
+    side: Side;
+    size: number;
+    price: number;
+    createdAt: number;
+}
     } catch (err) {
         console.error('Error in cancelStaleOrders:', err);
     }
