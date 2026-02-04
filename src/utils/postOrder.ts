@@ -117,7 +117,17 @@ const postSingleOrder = async (
     // Round size and price to allowed precision
     const size = Math.max(0.01, Math.floor(amountRaw * 100) / 100);
     const price = formatPriceForOrder(priceRaw);
+// ===== MODIFIED BLOCK: enforce API decimal accuracy =====
+    // helper function to round down to specific decimals
+    const roundTo = (value: number, decimals: number) => {   // 🔥 ADDED
+        const factor = 10 ** decimals;                        // 🔥 ADDED
+        return Math.floor(value * factor) / factor;           // 🔥 ADDED
+    };                                                       // 🔥 ADDED
 
+    // enforce taker max 4 decimals
+    const takerAmount = Math.max(0.0001, roundTo(size, 4));  // 🔥 MODIFIED
+    // enforce maker max 2 decimals
+    const makerAmount = Math.max(0.01, roundTo(takerAmount * price, 2)); // 🔥 MODIFIED
     // Calculate takerAmount (size) and makerAmount (size * price)
     const takerAmount = Math.max(0.0001, Math.floor(size * 10000) / 10000);
     const makerAmount = Math.max(0.01, Math.floor(takerAmount * price * 100) / 100);
