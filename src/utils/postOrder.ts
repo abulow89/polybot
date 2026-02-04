@@ -3,8 +3,6 @@ import { UserActivityInterface, UserPositionInterface } from '../interfaces/User
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
 
-const { chainId, name } = await provider.getNetwork();
-console.log("Connected chain:", chainId, name);
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 1000) / 1000; // 3 decimals max
@@ -111,6 +109,14 @@ const order_args = {
 };
     
 console.log('--- ORDER DEBUG ---');
+    
+    try {
+    const net = await (clobClient as any).provider.getNetwork();
+    console.log("RPC Network:", net.chainId);
+} catch (e) {
+    console.log("RPC network check failed", e);
+}
+    
 console.log('Order args:', order_args);
 console.log('makerAmount (int):', makerAmount); // ✅ added
 console.log('takerAmount (int):', takerAmount); // ✅ added
