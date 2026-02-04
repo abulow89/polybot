@@ -274,7 +274,7 @@ const postOrder = async (
                 (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
                 orderBook.bids[0]
             );
-
+                    
             const filled = await postSingleOrder(
                 clobClient,
                 Side.SELL,
