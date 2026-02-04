@@ -89,16 +89,21 @@ const postSingleOrder = async (
     priceRaw: number,
     feeRateBps: number
 ) => {
-const amount = Math.max(0.0001, roundShares(amountRaw));
+
+// ✅ ADDED: calculate takerAmount (size) and makerAmount (size * price) with correct decimal precision
+const takerAmount = Math.max(0.0001, Math.floor(amountRaw * 10000) / 10000); // 4 decimals
+const makerAmount = Math.max(0.01, Math.floor(takerAmount * priceRaw * 100) / 100); // 2 decimals
 
 const order_args = {
     side,
     tokenID: tokenId,
-    size: amount, // ✅ change amount → size
-    price: formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000)),
-    feeRateBps
+    size: takerAmount, // ✅ modified: now using takerAmount
+    price: formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000)), // ✅ remains
+    feeRateBps,
+    makerAmount, // ✅ added
+    takerAmount  // ✅ added
 };
-
+    
 console.log('--- ORDER DEBUG ---');
 console.log('Order args:', order_args);
 
@@ -109,7 +114,7 @@ const signedOrder = await safeCall(() => clobClient.createOrder(order_args));
 console.log('makerAmount:', (signedOrder as any).makerAmount);
 console.log('takerAmount:', (signedOrder as any).takerAmount);
 
-const notional = amount * priceRaw;
+const notional = takerAmount * priceRaw; // ✅ modified: use takerAmount
 
 const orderType = notional >= 1
     ? OrderType.FOK   // remove liquidity
@@ -121,11 +126,13 @@ const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
 
 if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
 else console.log('Successfully posted order');
-    // 🔥 ADDED: cancel stale micro-orders after posting GTC
+
+// 🔥 ADDED: cancel stale micro-orders after posting GTC
     if (orderType === OrderType.GTC) await cancelStaleOrders(clobClient);
         console.log('-------------------');
 
-if (resp.success) updateExposure(tokenId, side, amount);
+// ✅ ADDED: update exposure tracking
+if (resp.success) updateExposure(tokenId, side, takerAmount)
 
 return resp.success ? amount : 0;
 };
@@ -202,17 +209,14 @@ const postOrder = async (
                 (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
                 orderBook.bids[0]
             );
-
-            const sizeToSell =
-                Math.max(0.0001,
-                Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)) * 10000) / 10000
-            );
+// ✅ MODIFIED: compute takerAmount based on API rules
+            const takerAmount = Math.max(0.0001, Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)) * 10000) / 10000);
 
             const filled = await postSingleOrder(
                 clobClient,
                 Side.SELL,
                 tokenId,
-                sizeToSell,
+                takerAmount, // ✅ modified: use takerAmount
                 parseFloat(maxPriceBid.price),
                 feeRateBps
             );
@@ -269,8 +273,9 @@ const postOrder = async (
 
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
             let sharesToBuy = Math.min(affordableShares, askSize);
-                sharesToBuy = Math.max(0.0001, Math.floor(sharesToBuy * 10000) / 10000);
-
+             // ✅ MODIFIED: apply API decimal rules
+            sharesToBuy = Math.max(0.0001, Math.floor(sharesToBuy * 10000) / 10000);
+            
             console.log('sharesToBuy:', sharesToBuy);
 
             let filled = 0;
