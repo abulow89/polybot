@@ -127,8 +127,8 @@ const postSingleOrder = async (
 
     // Skip orders that are too small
     if (notional < 0.01) {
-        console.log(`[SKIP ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`);
-        return 0;
+        console.log(`[Rounding Oder ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`);
+        return 0.01;
     }
 
     // Skip if insufficient balance
