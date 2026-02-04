@@ -7,7 +7,6 @@ import { ENV } from '../config/env';
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
 const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100; // 2 decimals max
-const MIN_ORDER_SIZE = 0.01; 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
@@ -126,32 +125,23 @@ const postSingleOrder = async (
     // NEW ✅
     const size = amountRaw;  // ← DO NOT FORCE MIN HERE
     const price = formatPriceForOrder(priceRaw);
-// ===== MODIFIED BLOCK: enforce API decimal accuracy =====
-    // helper function to round down to specific decimals
-    const roundTo = (value: number, decimals: number) => {   // 🔥 ADDED
-        const factor = 10 ** decimals;                        // 🔥 ADDED
-        return Math.floor(value * factor) / factor;           // 🔥 ADDED
-    };                                                       // 🔥 ADDED
 
-// Convert to exchange base units FIRST
+  // Convert to exchange base units FIRST
 const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
 
 // Exchange rule: maker = floor(taker * price)
 const makerAmountBase = Math.floor(takerAmountBase * price);
+const notionalUSDC = makerAmountBase / 1e6;
 
+// Polymarket rule: marketable BUY orders must be >= $1
+if (side === Side.BUY && notionalUSDC < 1) {
+    console.log(`[SKIP] Marketable BUY too small: $${notionalUSDC.toFixed(4)} < $1 minimum`);
+    return 0;
+}
 // Convert back only for logs
 const takerAmount = fromBaseUnits(takerAmountBase, SHARE_DECIMALS);
 const makerAmount = fromBaseUnits(makerAmountBase, USDC_DECIMALS);
 
-    // Compute notional ONCE
-    const notional = takerAmount * price;
-
-// NEW ✅ match new min size
-const notionalBase = makerAmountBase;
-if (notionalBase < toBaseUnits(MIN_ORDER_SIZE * price, USDC_DECIMALS)) {
-  console.log("Order too small");
-  return 0;
-}
     // Skip if insufficient balance
     if (availableBalance !== undefined && notional > availableBalance) {
         console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
@@ -171,8 +161,6 @@ if (notionalBase < toBaseUnits(MIN_ORDER_SIZE * price, USDC_DECIMALS)) {
     console.log('===== RAW ORDER DEBUG =====');
     console.log('Raw size:', size);
     console.log('Raw price:', price);
-    console.log('Computed takerAmount:', takerAmount);
-    console.log('Computed makerAmount:', makerAmount);
     console.log('Notional:', notional.toFixed(6));
     console.log('Order args to API:', JSON.stringify(order_args, null, 2));
     console.log('===========================');
@@ -200,7 +188,7 @@ if (notionalBase < toBaseUnits(MIN_ORDER_SIZE * price, USDC_DECIMALS)) {
     // Update exposure
     updateExposure(tokenId, side, takerAmount);
 
-    const orderType = notional >= 0.001 ? OrderType.FOK : OrderType.GTC;
+    const orderType = OrderType.FOK; 
     console.log(`[OrderType] ${orderType} | Notional: $${notional.toFixed(3)}`);
 
     const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
@@ -350,10 +338,10 @@ const postOrder = async (
 
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
             let sharesToBuy = Math.min(affordableShares, askSize);
-
-// enforce minimum size
-            sharesToBuy = Math.max(MIN_ORDER_SIZE, sharesToBuy);
-            
+// Ensure BUY order meets $1 notional minimum
+            if (sharesToBuy * askPriceRaw < 1) {
+               sharesToBuy = 1 / askPriceRaw;
+}
             console.log('sharesToBuy:', sharesToBuy);
 
             let filled = 0;
