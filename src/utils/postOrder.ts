@@ -124,8 +124,8 @@ const postSingleOrder = async (
 // Compute makerAmount (2 decimals max)
   const makerAmount = formatMakerAmount(takerAmount * price);
 // Convert to integers for API
-  const takerAmountInt = toBaseUnitsInt(takerAmount, 4); // 4 decimals max for taker
-  const makerAmountInt = toBaseUnitsInt(makerAmount, 2); // 2 decimals max for maker
+const takerAmountInt = toBaseUnitsInt(takerAmount, 6);  // shares
+const makerAmountInt = toBaseUnitsInt(makerAmount, 6);  // USDC
   // Notional for balance check
   const notional = makerAmount;
 // total exposure including this order
