@@ -318,7 +318,7 @@ const postOrder = async (
                     sharesToBuy,
                     askPriceRaw,
                     feeRateBps,
-                    myBalance // 🔹 pass available balance
+                    my_Balance // 🔹 pass available balance
                 );
             } catch (err: any) {
                 if (err.response?.data?.error) console.log(`Order failed: ${err.response.data.error}`);
