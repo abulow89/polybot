@@ -124,19 +124,19 @@ const postSingleOrder = async (
 // Compute makerAmount (2 decimals max)
   const makerAmount = formatMakerAmount(takerAmount * price);
 // Convert to integers for API
-const takerAmountInt = toBaseUnitsInt(takerAmount, 6);  // shares
-const makerAmountInt = toBaseUnitsInt(makerAmount, 6);  // USDC
+  const takerAmountInt = toBaseUnitsInt(takerAmount, 4); // 4 decimals max for taker
+  const makerAmountInt = toBaseUnitsInt(makerAmount, 2); // 2 decimals max for maker
   // Notional for balance check
   const notional = makerAmount;
 // total exposure including this order
 const totalExposure = Object.values(exposure).reduce((sum, e) => sum + e, 0) + notional;
-  const maxTotalExposure = (availableBalance ?? 0) * 0.64; // 64% of balance max
-  if (totalExposure > maxTotalExposure) {
-    console.log(`[SKIP ORDER] Total exposure limit reached: ${totalExposure.toFixed(4)}, max allowed: ${maxTotalExposure.toFixed(4)}`);
+ const maxTotalExposure = (availableBalance ?? 0) * MAX_EXPOSURE_RATIO;
+if (totalExposure > maxTotalExposure) {
+    console.log(`[SKIP ORDER] Total exposure limit reached: ${totalExposure.toFixed(4)} > ${maxTotalExposure.toFixed(4)}`);
     return 0;
-  }
+}
   // Skip if insufficient balance
-  if (availableBalance !== undefined && notional > availableBalance) { // ✅ MODIFIED: balance check still active
+  if (availableBalance !== undefined && notional > availableBalance) {
     console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
     return 0;
   }
@@ -217,8 +217,7 @@ const postOrder = async (
             const ratio = trade.size / (user_position.size + trade.size);
             remaining *= ratio;
         }
-    // 🔹 ADDED: track available USDC for exposure/balance checks in SELL
-    let availableUSDC = my_balance; // ✅ ADDED
+
         while (remaining > 0 && retry < RETRY_LIMIT) {
             if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
 
@@ -250,15 +249,14 @@ const postOrder = async (
                 tokenId,
                 takerAmount, // ✅ modified: use takerAmount
                 parseFloat(maxPriceBid.price),
-                feeRateBps,
-                availableUSDC
+                feeRateBps
             );
 
             if (!filled) retry++;
             else {
                 remaining -= filled;
                 retry = 0;
-               }
+            }
 
             if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
         }
@@ -318,7 +316,7 @@ const postOrder = async (
                     sharesToBuy,
                     askPriceRaw,
                     feeRateBps,
-                    my_balance // 🔹 pass available balance
+                    remainingUSDC // 🔹 pass available balance
                 );
             } catch (err: any) {
                 if (err.response?.data?.error) console.log(`Order failed: ${err.response.data.error}`);
