@@ -80,6 +80,30 @@ interface ActiveOrder {
         console.error('Error in cancelStaleOrders:', err);
     }
 };
+// 🔥 ADDED — resilient order creation wrapper
+const createOrderWithRetry = async (
+  clobClient: ClobClient,
+  orderArgs: any,
+  attempts = 3
+) => {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await clobClient.createOrder(orderArgs);
+    } catch (e: any) {
+      const isRpcGlitch =
+        e?.code === 'CALL_EXCEPTION' ||
+        e?.message?.includes('missing revert data') ||
+        e?.message?.includes('header not found') ||
+        e?.message?.includes('timeout');
+
+      if (!isRpcGlitch || i === attempts - 1) throw e;
+
+      console.log(`[RPC GLITCH] createOrder retry ${i + 1}/${attempts}`);
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+};
+
 // ======== HELPER: POST SINGLE ORDER ========
 const postSingleOrder = async (
     clobClient: ClobClient,
@@ -120,8 +144,8 @@ console.log('--- ORDER DEBUG ---');
 console.log('Order args:', order_args);
 console.log('makerAmount (int):', makerAmount); // ✅ added
 console.log('takerAmount (int):', takerAmount); // ✅ added
-// ✅ NOW create the order
-const signedOrder = await safeCall(() => clobClient.createOrder(order_args));
+// 🔥 MODIFIED — use resilient creator
+const signedOrder = await createOrderWithRetry(clobClient, order_args);
 // ✅ NOW these values exist
 console.log('makerAmount:', (signedOrder as any).makerAmount);
 console.log('takerAmount:', (signedOrder as any).takerAmount);
