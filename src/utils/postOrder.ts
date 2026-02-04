@@ -7,7 +7,7 @@ import { ENV } from '../config/env';
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
 const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100; // 2 decimals max
-
+const MIN_ORDER_SIZE = 0.01; 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
@@ -115,7 +115,7 @@ const postSingleOrder = async (
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
 // 🔥 ADDED: minimum order size
-const MIN_ORDER_SIZE = 0.01; 
+
     // NEW ✅
     const size = Math.max(MIN_ORDER_SIZE, amountRaw);
     const price = formatPriceForOrder(priceRaw);
@@ -328,9 +328,10 @@ const postOrder = async (
             if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
-            let sharesToBuy = Math.max(MIN_ORDER_SIZE, sharesToBuy);
-             // ✅ MODIFIED: apply API decimal rules
-            sharesToBuy = Math.max(0.0001, sharesToBuy); // leave precision as-is, postSingleOrder will handle rounding
+            let sharesToBuy = Math.min(affordableShares, askSize);
+
+// enforce minimum size
+            sharesToBuy = Math.max(MIN_ORDER_SIZE, sharesToBuy);
             
             console.log('sharesToBuy:', sharesToBuy);
 
