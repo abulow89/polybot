@@ -114,8 +114,10 @@ const postSingleOrder = async (
     feeRateBps: number,
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
-// NEW ✅
-    const size = Math.max(0.0001, amountRaw); // keep full precision, round later for API
+// 🔥 ADDED: minimum order size
+const MIN_ORDER_SIZE = 0.01; 
+    // NEW ✅
+    const size = Math.max(MIN_ORDER_SIZE, amountRaw);
     const price = formatPriceForOrder(priceRaw);
 // ===== MODIFIED BLOCK: enforce API decimal accuracy =====
     // helper function to round down to specific decimals
@@ -124,19 +126,18 @@ const postSingleOrder = async (
         return Math.floor(value * factor) / factor;           // 🔥 ADDED
     };                                                       // 🔥 ADDED
 
-    // enforce taker max 4 decimals
-    const takerAmount = Math.max(0.0001, roundTo(size, 4));  // 🔥 MODIFIED
-    // enforce maker max 2 decimals
-    const makerAmount = Math.max(0.01, roundTo(takerAmount * price, 2)); // 🔥 MODIFIED
+// NEW ✅ enforce API decimals + min size
+    const takerAmount = roundTo(size, 4);              // taker max 4 decimals
+    const makerAmount = roundTo(takerAmount * price, 2); // maker max 2 decimals
 
     // Compute notional ONCE
     const notional = takerAmount * price;
 
-    // Skip orders that are too small
-    if (notional < 0.001) {
-        console.log(`[Rounding Oder ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`);
-        return 0.001;
-    }
+// NEW ✅ match new min size
+if (notional < MIN_ORDER_SIZE * price) {
+    console.log(`[Rounding Order ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`);
+    return 0;
+}
 
     // Skip if insufficient balance
     if (availableBalance !== undefined && notional > availableBalance) {
@@ -327,7 +328,7 @@ const postOrder = async (
             if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
-            let sharesToBuy = Math.min(affordableShares, askSize);
+            let sharesToBuy = Math.max(MIN_ORDER_SIZE, sharesToBuy);
              // ✅ MODIFIED: apply API decimal rules
             sharesToBuy = Math.max(0.0001, sharesToBuy); // leave precision as-is, postSingleOrder will handle rounding
             
