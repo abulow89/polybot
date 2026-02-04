@@ -114,15 +114,7 @@ const postSingleOrder = async (
     feeRateBps: number,
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
-// 🔴 RAW DEBUG: exact data to be sent to API
-    console.log('===== RAW ORDER DEBUG =====');
-    console.log('Raw size:', size);
-    console.log('Raw price:', price);
-    console.log('Computed takerAmount:', takerAmount);
-    console.log('Computed makerAmount:', makerAmount);
-    console.log('Notional:', notional.toFixed(6));
-    console.log('Order args to API:', JSON.stringify(order_args, null, 2));
-    console.log('===========================');
+
     // 🔥 ADDED: minimum order size
     // NEW ✅
     const size = Math.max(MIN_ORDER_SIZE, amountRaw);
@@ -162,7 +154,15 @@ if (notional < MIN_ORDER_SIZE * price) {
         makerAmount,
         takerAmount
     };
-
+// 🔴 RAW DEBUG: exact data to be sent to API
+    console.log('===== RAW ORDER DEBUG =====');
+    console.log('Raw size:', size);
+    console.log('Raw price:', price);
+    console.log('Computed takerAmount:', takerAmount);
+    console.log('Computed makerAmount:', makerAmount);
+    console.log('Notional:', notional.toFixed(6));
+    console.log('Order args to API:', JSON.stringify(order_args, null, 2));
+    console.log('===========================');
     console.log('--- ORDER DEBUG ---');
     console.log('Order args:', order_args);
     console.log('makerAmount (int):', makerAmount);
