@@ -133,8 +133,8 @@ const postSingleOrder = async (
 
   console.log('===== RAW ORDER DEBUG =====');
   console.log('Order args:', order_args);
-  console.log('makerAmountBase:', makerAmountBase);
-  console.log('takerAmountBase:', takerAmountBase);
+  console.log('makerAmount:', makerAmount);
+  console.log('takerAmount:', takerAmount);
 
   const signedOrder = await createOrderWithRetry(clobClient, order_args);
   if (!signedOrder) return 0;
