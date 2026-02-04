@@ -115,7 +115,7 @@ const postSingleOrder = async (
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
     // Round size and price to allowed precision
-    const size = Math.max(0.001, Math.floor(amountRaw * 1000) / 1000);
+    const size = Math.max(0.01, Math.floor(amountRaw * 100) / 100);
     const price = formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000));
 
     // Calculate takerAmount (size) and makerAmount (size * price)
