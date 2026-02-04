@@ -111,96 +111,78 @@ const postSingleOrder = async (
     tokenId: string,
     amountRaw: number,
     priceRaw: number,
-    feeRateBps: number
-    
+    feeRateBps: number,
+    availableBalance?: number // ✅ Added optional balance parameter
 ) => {
-// Round size and price to allowed precision
-    const size = Math.max(0.0001, Math.floor(amountRaw * 10000) / 10000); // ✅ MODIFIED: rounding
+    // Round size and price to allowed precision
+    const size = Math.max(0.0001, Math.floor(amountRaw * 10000) / 10000);
     const price = formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000));
-    
-// ✅ ADDED: calculate takerAmount (size) and makerAmount (size * price)
+
+    // Calculate takerAmount (size) and makerAmount (size * price)
     const takerAmount = Math.max(0.0001, Math.floor(size * 10000) / 10000);
     const makerAmount = Math.max(0.01, Math.floor(takerAmount * price * 100) / 100);
-// ✅ Skip orders too small to post
-    if (size * price < 0.01) return 0;
-// 🔥 ADDED: check for minimum order size
-    if (notional < 0.01) {
-        console.log(`[SKIP ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`); // ✅ ADDED
-        return 0; // ✅ ADDED
-    }
 
-    // 🔥 ADDED: check for insufficient balance
-    if (availableBalance !== undefined && notional > availableBalance) {
-        console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${my_Balance.toFixed(4)}`); // ✅ ADDED
-        return 0; // ✅ ADDED
-    }
-    
-const order_args = {
-    side,
-    tokenID: tokenId,
-    size: size,                  // ✅ modified: now integer
-    price: price,
-    feeRateBps,
-    makerAmount, // ✅ added
-    takerAmount  // ✅ added
-};
-    
-console.log('--- ORDER DEBUG ---');
-    
-    try {
-    const net = await (clobClient as any).provider.getNetwork();
-    console.log("RPC Network:", net.chainId);
-} catch (e) {
-    console.log("RPC network check failed", e);
-}
-    
-console.log('Order args:', order_args);
-console.log('makerAmount (int):', makerAmount); // ✅ added
-console.log('takerAmount (int):', takerAmount); // ✅ added
-// 🔥 MODIFIED — use resilient creator
-const signedOrder = await createOrderWithRetry(clobClient, order_args);
-    
-    if (!signedOrder) {
-    console.log('Order creation failed — signedOrder undefined');
-    return 0;
-}
-// ✅ NOW these values exist
-console.log('makerAmount:', (signedOrder as any).makerAmount);
-console.log('takerAmount:', (signedOrder as any).takerAmount);
-// ✅ Update exposure using float amount for internal tracking
-    if (signedOrder) updateExposure(tokenId, side, takerAmount);
-    
-const notional = takerAmount * price; // ✅ modified: use takerAmount
-// 🔥 NEW: check for minimum order size
+    // Compute notional ONCE
+    const notional = takerAmount * price;
+
+    // Skip orders that are too small
     if (notional < 0.01) {
         console.log(`[SKIP ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`);
         return 0;
     }
-// 🔥 NEW: check for insufficient balance
+
+    // Skip if insufficient balance
     if (availableBalance !== undefined && notional > availableBalance) {
         console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
         return 0;
     }
-    
-const orderType = notional >= 1
-    ? OrderType.FOK   // remove liquidity
-    : OrderType.GTC;  // add liquidity
 
-console.log(`[OrderType] ${orderType} | Notional: $${notional.toFixed(4)}`);
+    const order_args = {
+        side,
+        tokenID: tokenId,
+        size,
+        price,
+        feeRateBps,
+        makerAmount,
+        takerAmount
+    };
 
-const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
+    console.log('--- ORDER DEBUG ---');
+    console.log('Order args:', order_args);
+    console.log('makerAmount (int):', makerAmount);
+    console.log('takerAmount (int):', takerAmount);
 
-if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
-else console.log('Successfully posted order');
+    try {
+        const net = await (clobClient as any).provider.getNetwork();
+        console.log("RPC Network:", net.chainId);
+    } catch (e) {
+        console.log("RPC network check failed", e);
+    }
 
-// 🔥 ADDED: cancel stale micro-orders after posting GTC
+    const signedOrder = await createOrderWithRetry(clobClient, order_args);
+    if (!signedOrder) {
+        console.log('Order creation failed — signedOrder undefined');
+        return 0;
+    }
+
+    console.log('makerAmount:', (signedOrder as any).makerAmount);
+    console.log('takerAmount:', (signedOrder as any).takerAmount);
+
+    // Update exposure
+    updateExposure(tokenId, side, takerAmount);
+
+    const orderType = notional >= 1 ? OrderType.FOK : OrderType.GTC;
+    console.log(`[OrderType] ${orderType} | Notional: $${notional.toFixed(4)}`);
+
+    const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
+
+    if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
+    else console.log('Successfully posted order');
+
     if (orderType === OrderType.GTC) await cancelStaleOrders(clobClient);
-        console.log('-------------------');
+    console.log('-------------------');
 
-// ✅ ADDED: update exposure tracking
-if (resp.success) updateExposure(tokenId, side, takerAmount)
-
-return resp.success ? takerAmount : 0; // ✅ modified: return float internally
+    return resp.success ? takerAmount : 0;
 };
 
 // ======== MAIN POST ORDER FUNCTION ========
