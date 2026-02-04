@@ -108,8 +108,8 @@ const makerAmountBase = Math.floor(takerAmountBase * price);
 const notional = makerAmountBase / 1e6; // 🔥 THIS is the USDC notional
 
 // Polymarket rule: marketable BUY orders must be >= $1
-if (side === Side.BUY && notionalUSDC < 1) {
-    console.log(`[SKIP] Marketable BUY too small: $${notionalUSDC.toFixed(4)} < $1 minimum`);
+if (side === Side.BUY && notional < 1) {
+    console.log(`[SKIP] Marketable BUY too small: $${notional.toFixed(4)} < $1 minimum`);
     return 0;
 }
 // Convert back only for logs
