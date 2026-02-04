@@ -3,6 +3,8 @@ import { UserActivityInterface, UserPositionInterface } from '../interfaces/User
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
 
+const { chainId, name } = await provider.getNetwork();
+console.log("Connected chain:", chainId, name);
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 1000) / 1000; // 3 decimals max
