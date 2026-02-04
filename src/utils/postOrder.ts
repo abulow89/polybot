@@ -258,9 +258,7 @@ const postOrder = async (
             else {
                 remaining -= filled;
                 retry = 0;
-             // 🔹 ADDED: reduce availableUSDC based on order notional for exposure tracking
-            availableUSDC -= filled * parseFloat(maxPriceBid.price); // ✅ ADDED
-        }
+               }
 
             if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
         }
