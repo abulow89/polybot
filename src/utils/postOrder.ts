@@ -114,8 +114,8 @@ const postSingleOrder = async (
     feeRateBps: number,
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
-    // Round size and price to allowed precision
-    const size = Math.max(0.01, Math.floor(amountRaw * 100) / 100);
+// NEW ✅
+    const size = Math.max(0.0001, amountRaw); // keep full precision, round later for API
     const price = formatPriceForOrder(priceRaw);
 // ===== MODIFIED BLOCK: enforce API decimal accuracy =====
     // helper function to round down to specific decimals
@@ -329,7 +329,7 @@ const postOrder = async (
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
             let sharesToBuy = Math.min(affordableShares, askSize);
              // ✅ MODIFIED: apply API decimal rules
-            sharesToBuy = Math.max(0.001, Math.floor(sharesToBuy * 1000) / 1000);
+            sharesToBuy = Math.max(0.0001, sharesToBuy); // leave precision as-is, postSingleOrder will handle rounding
             
             console.log('sharesToBuy:', sharesToBuy);
 
