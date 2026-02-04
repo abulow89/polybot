@@ -108,11 +108,10 @@ const postSingleOrder = async (
 
   // Convert to base units
   const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
-  const makerAmountBase = Math.floor(takerAmountBase * price); // USDC base units
-
-  // Convert back to human-readable with correct API decimals
-  const takerAmount = enforceMinShares(formatTakerAmount(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)));
-  const makerAmount = formatMakerAmount(fromBaseUnits(makerAmountBase, USDC_DECIMALS));
+  
+// ✅ new makerAmount calculation
+   const takerAmount = enforceMinShares(formatTakerAmount(size));
+   const makerAmount = formatMakerAmount(takerAmount * price);
 
 // Define notional here
   const notional = makerAmount;
