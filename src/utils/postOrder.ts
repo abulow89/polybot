@@ -96,6 +96,15 @@ const createOrderWithRetry = async (
     }
   }
 };
+// ======== HELPER: convert to base units ========
+const toBaseUnitsInt = (amount: number, decimals: number) => {
+  return Math.ceil(amount * 10 ** decimals); // round up to ensure minimums
+};
+
+// ======== HELPER: convert back to float for logging ========
+const fromBaseUnitsInt = (amountInt: number, decimals: number) => {
+  return amountInt / 10 ** decimals;
+};
 // ======== HELPER: POST SINGLE ORDER ===================================================================================
 const postSingleOrder = async (
   clobClient: ClobClient,
@@ -109,12 +118,13 @@ const postSingleOrder = async (
   const price = formatPriceForOrder(priceRaw);
   const size = amountRaw;
 
-// ✅ MODIFIED: enforce min taker amount first
-  const takerAmount = enforceMinShares(formatTakerAmount(size)); // human-readable, max 4 decimals
-
-  // ✅ MODIFIED: compute makerAmount from takerAmount and price, enforce min maker amount
-  const makerAmount = enforceMinMakerAmount(formatMakerAmount(takerAmount * price)); // human-readable, max 2 decimals
-
+// Round takerAmount according to API max precision and enforce minimum
+  const takerAmount = enforceMinShares(formatTakerAmount(size)); // e.g., 0.01 min, max 4 decimals
+// Compute makerAmount (2 decimals max)
+  const makerAmount = formatMakerAmount(takerAmount * price);
+// Convert to integers for API
+  const takerAmountInt = toBaseUnitsInt(takerAmount, 4); // 4 decimals max for taker
+  const makerAmountInt = toBaseUnitsInt(makerAmount, 2); // 2 decimals max for maker
   // Notional for balance check
   const notional = makerAmount;
 
@@ -123,14 +133,14 @@ const postSingleOrder = async (
     console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
     return 0;
   }
-  const order_args = {
+ const order_args = {
     side,
     tokenID: tokenId,
-    size: takerAmount, // human-readable, rounded
-    price,
+    size: takerAmountInt.toString(), // send integer as string
+    price: price.toFixed(2), // keep price string at 2 decimals
     feeRateBps,
-    makerAmount: makerAmount.toFixed(2), // string with 2 decimals
-    takerAmount: takerAmount.toFixed(4), // string with 4 decimals
+    makerAmount: makerAmountInt.toString(), // send integer as string
+    takerAmount: takerAmountInt.toString(), // send integer as string
   };
 
   console.log('===== RAW ORDER DEBUG =====');
