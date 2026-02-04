@@ -54,7 +54,27 @@ const updateExposure = (tokenId: string, side: Side, filled: number) => {
     exposure[tokenId] += side === Side.BUY ? filled : -filled;
     console.log(`[Exposure] Token ${tokenId}: ${exposure[tokenId]} shares`);
 };
+// 🔥 ADDED: GTC AUTO-CANCELLATION ENGINE
+const CANCEL_THRESHOLD_MS = 5000; // cancel micro-orders older than 5s
 
+const cancelStaleOrders = async (clobClient: ClobClient) => {
+    try {
+        const orders = await safeCall(() => clobClient.getUserOrders(USER_ADDRESS));
+        const now = Date.now();
+        for (const order of orders) {
+            const orderAge = now - order.createdAt;
+            const isMicroOrder = order.amount * order.price < 1;
+            if (isMicroOrder && orderAge > CANCEL_THRESHOLD_MS) {
+                console.log(`[CANCEL] Stale micro-order: ${order.id}, age: ${orderAge}ms`);
+                await safeCall(() => clobClient.cancelOrder(order.id));
+                // 🔥 ADDED: update exposure tracking
+                exposure[order.tokenID] -= order.side === Side.BUY ? order.amount : -order.amount;
+            }
+        }
+    } catch (err) {
+        console.error('Error in cancelStaleOrders:', err);
+    }
+};
 // ======== HELPER: POST SINGLE ORDER ========
 const postSingleOrder = async (
     clobClient: ClobClient,
@@ -78,18 +98,27 @@ console.log('--- ORDER DEBUG ---');
 console.log('Order args:', order_args);
 
 // ✅ NOW create the order
-const signedOrder = await safeCall(() => clobClient.createMarketOrder(order_args));
+const signedOrder = await safeCall(() => clobClient.createOrder(order_args));
 
 // ✅ NOW these values exist
 console.log('makerAmount:', (signedOrder as any).makerAmount);
 console.log('takerAmount:', (signedOrder as any).takerAmount);
 
-const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
+const notional = amount * priceRaw;
+
+const orderType = notional >= 1
+    ? OrderType.FOK   // remove liquidity
+    : OrderType.GTC;  // add liquidity
+
+console.log(`[OrderType] ${orderType} | Notional: $${notional.toFixed(4)}`);
+
+const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
 
 if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
 else console.log('Successfully posted order');
-
-console.log('-------------------');
+    // 🔥 ADDED: cancel stale micro-orders after posting GTC
+    if (orderType === OrderType.GTC) await cancelStaleOrders(clobClient);
+        console.log('-------------------');
 
 if (resp.success) updateExposure(tokenId, side, amount);
 
@@ -129,7 +158,8 @@ const postOrder = async (
 
     console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
     
-    // ======== SELL / MERGE ========
+///// ======== SELL / MERGE ========//////////////////////////////////////////////////////////////////////////////////////////////////
+   
     if (condition === 'merge' || condition === 'sell') {
         console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
         if (!my_position) {
@@ -168,7 +198,10 @@ const postOrder = async (
                 orderBook.bids[0]
             );
 
-            const sizeToSell = Math.min(remaining, parseFloat(maxPriceBid.size));
+            const sizeToSell =
+                Math.max(0.0001,
+                Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)) * 10000) / 10000
+            );
 
             const filled = await postSingleOrder(
                 clobClient,
@@ -191,7 +224,7 @@ const postOrder = async (
         await updateActivity();
     }
 
-    // ======== BUY ========
+////// ======== BUY ========////////////////////////////////////////////////////////////////////////////////////////////////////
     else if (condition === 'buy') {
         console.log('Buy Strategy...');
         const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
@@ -230,8 +263,8 @@ const postOrder = async (
             if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
-            let sharesToBuy = Math.floor(Math.min(affordableShares, askSize));
-            sharesToBuy = Math.max(0.01, sharesToBuy);
+            let sharesToBuy = Math.min(affordableShares, askSize);
+                sharesToBuy = Math.max(0.0001, Math.floor(sharesToBuy * 10000) / 10000);
 
             console.log('sharesToBuy:', sharesToBuy);
 
