@@ -121,8 +121,21 @@ const postSingleOrder = async (
 // ✅ ADDED: calculate takerAmount (size) and makerAmount (size * price)
     const takerAmount = Math.max(0.0001, Math.floor(size * 10000) / 10000);
     const makerAmount = Math.max(0.01, Math.floor(takerAmount * price * 100) / 100);
- // ✅ Skip orders too small to post
+// ✅ Skip orders too small to post
     if (size * price < 0.01) return 0;
+// 🔥 ADDED: check for minimum order size
+    const notional = takerAmount * price; // ✅ MODIFIED: use takerAmount
+    if (notional < 0.01) {
+        console.log(`[SKIP ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`); // ✅ ADDED
+        return 0; // ✅ ADDED
+    }
+
+    // 🔥 ADDED: check for insufficient balance
+    if (availableBalance !== undefined && notional > availableBalance) {
+        console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`); // ✅ ADDED
+        return 0; // ✅ ADDED
+    }
+    
 const order_args = {
     side,
     tokenID: tokenId,
