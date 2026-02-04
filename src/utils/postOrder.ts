@@ -4,9 +4,16 @@ import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
 
 // ===== EXCHANGE FORMAT HELPERS =====
+// ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
-const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100; // 2 decimals max
+
+// FIXED: makerAmount rounding — round to 2 decimals instead of flooring
+const formatMakerAmount = (a: number) => Math.round(a * 100) / 100; // 2 decimals max
+
+// Taker amount rounding — round down to 4 decimals (max accuracy for API)
+const formatTakerAmount = (a: number) => Math.floor(a * 10000) / 10000; // 4 decimals max
+
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
@@ -84,11 +91,6 @@ const createOrderWithRetry = async (
     }
   }
 };
-// ======== DECIMAL / MINIMUM SHARE HELPERS ========
-const MIN_SHARES = 0.01;
-const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
-const formatTaker = (shares: number) => Math.floor(shares * 10000) / 10000; // 4 decimals max
-const formatMaker = (amount: number) => Math.floor(amount * 100) / 100;       // 2 decimals max
 // ======== HELPER: POST SINGLE ORDER ===================================================================================
 const postSingleOrder = async (
   clobClient: ClobClient,
@@ -102,14 +104,13 @@ const postSingleOrder = async (
   const price = formatPriceForOrder(priceRaw);
   const size = amountRaw;
 
-  // Convert to base units
-  const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
-  const makerAmountBase = Math.floor(takerAmountBase * price);
+  /// Convert to base units for internal calculations
+const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
+const makerAmountBase = Math.floor(takerAmountBase * price); // USDC base units
 
-  // Convert back to human-readable with correct rounding
-  const takerAmount = enforceMinShares(formatTaker(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)));
-  const makerAmount = formatMaker(fromBaseUnits(makerAmountBase, USDC_DECIMALS));
-  const notional = makerAmount;
+// Convert back to human-readable with correct API decimals
+const takerAmount = enforceMinShares(formatTakerAmount(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)));
+const makerAmount = formatMakerAmount(fromBaseUnits(makerAmountBase, USDC_DECIMALS));
 
   if (availableBalance !== undefined && notional > availableBalance) {
     console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
@@ -122,8 +123,8 @@ const postSingleOrder = async (
     size: takerAmount, // human-readable, rounded
     price,
     feeRateBps,
-    makerAmount: formatMaker(fromBaseUnits(makerAmountBase, USDC_DECIMALS)).toString(), // 2 decimals
-    takerAmount: formatTaker(fromBaseUnits(takerAmountBase, SHARE_DECIMALS)).toString(), // 4 decimals
+    makerAmount: makerAmount.toFixed(2), // string with 2 decimals
+    takerAmount: takerAmount.toFixed(4), // string with 4 decimals
   };
 
   console.log('===== RAW ORDER DEBUG =====');
