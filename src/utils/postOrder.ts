@@ -11,7 +11,14 @@ const MIN_ORDER_SIZE = 0.01;
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
+const USDC_DECIMALS = 6;
+const SHARE_DECIMALS = 6;
 
+const toBaseUnits = (x: number, decimals: number) =>
+  Math.floor(x * 10 ** decimals);
+
+const fromBaseUnits = (x: number, decimals: number) =>
+  x / 10 ** decimals;
 const FAST_ATTEMPTS = 2;
 // ======== ROUND SHARE HELPER ======
 const roundShares = (x: number) => Math.floor(x * 10) / 10; // 2 decimal precision
@@ -126,19 +133,25 @@ const postSingleOrder = async (
         return Math.floor(value * factor) / factor;           // 🔥 ADDED
     };                                                       // 🔥 ADDED
 
-// NEW ✅ enforce API decimals + min size
-    const takerAmount = roundTo(size, 4);              // taker max 4 decimals
-    const makerAmount = roundTo(takerAmount * price, 2); // maker max 2 decimals
+// Convert to exchange base units FIRST
+const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
+
+// Exchange rule: maker = floor(taker * price)
+const makerAmountBase = Math.floor(takerAmountBase * price);
+
+// Convert back only for logs
+const takerAmount = fromBaseUnits(takerAmountBase, SHARE_DECIMALS);
+const makerAmount = fromBaseUnits(makerAmountBase, USDC_DECIMALS);
 
     // Compute notional ONCE
     const notional = takerAmount * price;
 
 // NEW ✅ match new min size
-if (notional < MIN_ORDER_SIZE * price) {
-    console.log(`[Rounding Order ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`);
-    return 0;
+const notionalBase = makerAmountBase;
+if (notionalBase < toBaseUnits(MIN_ORDER_SIZE * price, USDC_DECIMALS)) {
+  console.log("Order too small");
+  return 0;
 }
-
     // Skip if insufficient balance
     if (availableBalance !== undefined && notional > availableBalance) {
         console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
@@ -148,11 +161,11 @@ if (notional < MIN_ORDER_SIZE * price) {
     const order_args = {
         side,
         tokenID: tokenId,
-        size,
+        size: takerAmount, // human format still needed
         price,
         feeRateBps,
-        makerAmount,
-        takerAmount
+        makerAmount: makerAmountBase.toString(),
+        takerAmount: takerAmountBase.toString(),
     };
 // 🔴 RAW DEBUG: exact data to be sent to API
     console.log('===== RAW ORDER DEBUG =====');
@@ -165,9 +178,9 @@ if (notional < MIN_ORDER_SIZE * price) {
     console.log('===========================');
     console.log('--- ORDER DEBUG ---');
     console.log('Order args:', order_args);
-    console.log('makerAmount (int):', makerAmount);
-    console.log('takerAmount (int):', takerAmount);
-
+    console.log('makerAmountBase:', makerAmountBase);
+    console.log('takerAmountBase:', takerAmountBase);
+    
     try {
         const net = await (clobClient as any).provider.getNetwork();
         console.log("RPC Network:", net.chainId);
