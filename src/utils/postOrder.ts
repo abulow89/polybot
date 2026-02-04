@@ -2,8 +2,7 @@ import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
-// 🔹 GLOBAL MAX EXPOSURE: never spend more than 64% of balance
-const MAX_EXPOSURE_RATIO = 0.64;
+
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
@@ -128,23 +127,6 @@ const postSingleOrder = async (
   const makerAmountInt = toBaseUnitsInt(makerAmount, 2); // 2 decimals max for maker
   // Notional for balance check
   const notional = makerAmount;
-  // 🔹 ADDED — compute current TOTAL USDC exposure (not shares)
-  const currentExposureUSDC = Object.entries(exposure).reduce((sum, [token, shares]) => {
-    return sum + Math.abs(shares) * price; // approximate using current price
-  }, 0);
-
-  // 🔹 ADDED — only enforce if balance is provided
-  if (availableBalance !== undefined) {
-    const maxTotalExposure = availableBalance * MAX_EXPOSURE_RATIO;
-
-    // 🔹 ADDED — global exposure protection
-    if (currentExposureUSDC + notional > maxTotalExposure) {
-      console.log(
-        `[SKIP ORDER] Total exposure limit reached: ${(currentExposureUSDC + notional).toFixed(4)} > ${maxTotalExposure.toFixed(4)}`
-      );
-      return 0;
-    }
-  }
 
   // Skip if insufficient balance
   if (availableBalance !== undefined && notional > availableBalance) {
@@ -326,8 +308,7 @@ const postOrder = async (
                     tokenId,
                     sharesToBuy,
                     askPriceRaw,
-                    feeRateBps,
-                    remainingUSDC // 🔹 pass available balance
+                    feeRateBps
                 );
             } catch (err: any) {
                 if (err.response?.data?.error) console.log(`Order failed: ${err.response.data.error}`);
