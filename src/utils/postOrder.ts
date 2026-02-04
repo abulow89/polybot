@@ -128,6 +128,7 @@ const postSingleOrder = async (
 
 // NEW ✅ enforce API decimals + min size
     const takerAmount = roundTo(size, 4);              // taker max 4 decimals
+    const makerAmountRaw = takerAmount * price;
     const makerAmount = Math.max(roundTo(makerAmountRaw, 2), 0.01);
 
     // Compute notional ONCE
