@@ -134,7 +134,7 @@ else console.log('Successfully posted order');
 // ✅ ADDED: update exposure tracking
 if (resp.success) updateExposure(tokenId, side, takerAmount)
 
-return resp.success ? amount : 0;
+return resp.success ? takerAmount : 0;
 };
 
 // ======== MAIN POST ORDER FUNCTION ========
