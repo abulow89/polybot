@@ -128,13 +128,24 @@ const postSingleOrder = async (
   const makerAmountInt = toBaseUnitsInt(makerAmount, 2); // 2 decimals max for maker
   // Notional for balance check
   const notional = makerAmount;
-// total exposure including this order
-const totalExposure = Object.values(exposure).reduce((sum, e) => sum + e, 0) + notional;
- const maxTotalExposure = (availableBalance ?? 0) * MAX_EXPOSURE_RATIO;
-if (totalExposure > maxTotalExposure) {
-    console.log(`[SKIP ORDER] Total exposure limit reached: ${totalExposure.toFixed(4)} > ${maxTotalExposure.toFixed(4)}`);
-    return 0;
-}
+  // 🔹 ADDED — compute current TOTAL USDC exposure (not shares)
+  const currentExposureUSDC = Object.entries(exposure).reduce((sum, [token, shares]) => {
+    return sum + Math.abs(shares) * price; // approximate using current price
+  }, 0);
+
+  // 🔹 ADDED — only enforce if balance is provided
+  if (availableBalance !== undefined) {
+    const maxTotalExposure = availableBalance * MAX_EXPOSURE_RATIO;
+
+    // 🔹 ADDED — global exposure protection
+    if (currentExposureUSDC + notional > maxTotalExposure) {
+      console.log(
+        `[SKIP ORDER] Total exposure limit reached: ${(currentExposureUSDC + notional).toFixed(4)} > ${maxTotalExposure.toFixed(4)}`
+      );
+      return 0;
+    }
+  }
+
   // Skip if insufficient balance
   if (availableBalance !== undefined && notional > availableBalance) {
     console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
