@@ -126,9 +126,9 @@ const postSingleOrder = async (
     const notional = takerAmount * price;
 
     // Skip orders that are too small
-    if (notional < 0.01) {
+    if (notional < 0.001) {
         console.log(`[Rounding Oder ORDER] Too small: size=${size}, price=${price}, notional=${notional.toFixed(6)}`);
-        return 0.01;
+        return 0.001;
     }
 
     // Skip if insufficient balance
@@ -171,8 +171,8 @@ const postSingleOrder = async (
     // Update exposure
     updateExposure(tokenId, side, takerAmount);
 
-    const orderType = notional >= 1 ? OrderType.FOK : OrderType.GTC;
-    console.log(`[OrderType] ${orderType} | Notional: $${notional.toFixed(4)}`);
+    const orderType = notional >= 0.001 ? OrderType.FOK : OrderType.GTC;
+    console.log(`[OrderType] ${orderType} | Notional: $${notional.toFixed(3)}`);
 
     const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
 
