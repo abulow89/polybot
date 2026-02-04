@@ -2,7 +2,8 @@ import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
-
+// 🔹 GLOBAL MAX EXPOSURE: never spend more than 64% of balance
+const MAX_EXPOSURE_RATIO = 0.64;
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
@@ -127,7 +128,13 @@ const postSingleOrder = async (
   const makerAmountInt = toBaseUnitsInt(makerAmount, 2); // 2 decimals max for maker
   // Notional for balance check
   const notional = makerAmount;
-
+// total exposure including this order
+const totalExposure = Object.values(exposure).reduce((sum, e) => sum + e, 0) + notional;
+ const maxTotalExposure = (availableBalance ?? 0) * MAX_EXPOSURE_RATIO;
+if (totalExposure > maxTotalExposure) {
+    console.log(`[SKIP ORDER] Total exposure limit reached: ${totalExposure.toFixed(4)} > ${maxTotalExposure.toFixed(4)}`);
+    return 0;
+}
   // Skip if insufficient balance
   if (availableBalance !== undefined && notional > availableBalance) {
     console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
@@ -308,7 +315,8 @@ const postOrder = async (
                     tokenId,
                     sharesToBuy,
                     askPriceRaw,
-                    feeRateBps
+                    feeRateBps,
+                    remainingUSDC // 🔹 pass available balance
                 );
             } catch (err: any) {
                 if (err.response?.data?.error) console.log(`Order failed: ${err.response.data.error}`);
