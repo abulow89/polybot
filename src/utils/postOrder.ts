@@ -114,7 +114,15 @@ const postSingleOrder = async (
     feeRateBps: number,
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
-
+// 🔴 RAW DEBUG: exact data to be sent to API
+    console.log('===== RAW ORDER DEBUG =====');
+    console.log('Raw size:', size);
+    console.log('Raw price:', price);
+    console.log('Computed takerAmount:', takerAmount);
+    console.log('Computed makerAmount:', makerAmount);
+    console.log('Notional:', notional.toFixed(6));
+    console.log('Order args to API:', JSON.stringify(order_args, null, 2));
+    console.log('===========================');
     // 🔥 ADDED: minimum order size
     // NEW ✅
     const size = Math.max(MIN_ORDER_SIZE, amountRaw);
@@ -128,8 +136,7 @@ const postSingleOrder = async (
 
 // NEW ✅ enforce API decimals + min size
     const takerAmount = roundTo(size, 4);              // taker max 4 decimals
-    const makerAmountRaw = takerAmount * price;
-    const makerAmount = Math.max(roundTo(makerAmountRaw, 2), 0.0001);
+    const makerAmount = roundTo(takerAmount * price, 2); // maker max 2 decimals
 
     // Compute notional ONCE
     const notional = takerAmount * price;
@@ -155,15 +162,7 @@ if (notional < MIN_ORDER_SIZE * price) {
         makerAmount,
         takerAmount
     };
-// 🔴 RAW DEBUG: exact data to be sent to API
-    console.log('===== RAW ORDER DEBUG =====');
-    console.log('Raw size:', size);
-    console.log('Raw price:', price);
-    console.log('Computed takerAmount:', takerAmount);
-    console.log('Computed makerAmount:', makerAmount);
-    console.log('Notional:', notional.toFixed(6));
-    console.log('Order args to API:', JSON.stringify(order_args, null, 2));
-    console.log('===========================');
+
     console.log('--- ORDER DEBUG ---');
     console.log('Order args:', order_args);
     console.log('makerAmount (int):', makerAmount);
@@ -274,7 +273,9 @@ const postOrder = async (
                 (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
                 orderBook.bids[0]
             );
-                    
+// ✅ MODIFIED: compute takerAmount based on API rules
+            const takerAmount = Math.max(0.0001, Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)) * 10000) / 10000);
+
             const filled = await postSingleOrder(
                 clobClient,
                 Side.SELL,
