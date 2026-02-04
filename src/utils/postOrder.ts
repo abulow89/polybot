@@ -84,7 +84,8 @@ const createOrderWithRetry = async (
     }
   }
 };
-
+// Minimum 0.01 shares
+const enforceMinShares = (shares: number) => Math.max(0.01, shares);
 // ======== HELPER: POST SINGLE ORDER ========
 const postSingleOrder = async (
     clobClient: ClobClient,
@@ -96,8 +97,6 @@ const postSingleOrder = async (
     availableBalance?: number // ✅ Added optional balance parameter
 ) => {
 
-  // Minimum 0.01 shares
-const enforceMinShares = (shares: number) => Math.max(0.01, shares);
   // NEW ✅
     const size = amountRaw;  // ← DO NOT FORCE MIN HERE
     const price = formatPriceForOrder(priceRaw);
@@ -242,7 +241,9 @@ const postOrder = async (
                 orderBook.bids[0]
             );
 // ✅ MODIFIED: compute takerAmount based on API rules
-            const takerAmount = enforceMinShares(Math.max(0.0001, Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)) * 10000) / 10000));
+            const takerAmount = enforceMinShares(
+                  Math.max(0.0001, Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)) * 10000) / 10000)
+                );
 
             const filled = await postSingleOrder(
                 clobClient,
@@ -302,9 +303,9 @@ const postOrder = async (
 
             if (isNaN(askSize) || askSize <= 0) break;
             if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
-
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
-            sharesToBuy = enforceMinShares(sharesToBuy);
+            let sharesToBuy = Math.min(affordableShares, askSize);
+                sharesToBuy = enforceMinShares(sharesToBuy);
 
             console.log('sharesToBuy:', sharesToBuy);
 
