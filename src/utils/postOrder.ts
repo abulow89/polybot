@@ -13,7 +13,8 @@ const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
 const FAST_ATTEMPTS = 2;
-
+// ======== ROUND SHARE HELPER ======
+const roundShares = (x: number) => Math.floor(x * 10000) / 10000; // 4 decimal precision
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;
@@ -63,7 +64,7 @@ const postSingleOrder = async (
     priceRaw: number,
     feeRateBps: number
 ) => {
-const amount = Math.max(0.01, Math.floor(amountRaw));
+const amount = Math.max(0.0001, roundShares(amountRaw));
 
 const order_args = {
     side,
