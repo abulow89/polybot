@@ -274,8 +274,6 @@ const postOrder = async (
                 (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
                 orderBook.bids[0]
             );
-// ✅ MODIFIED: compute takerAmount based on API rules
-            const takerAmount = Math.max(0.0001, Math.floor(Math.min(remaining, parseFloat(maxPriceBid.size)) * 10000) / 10000);
 
             const filled = await postSingleOrder(
                 clobClient,
