@@ -5,7 +5,7 @@ import { ENV } from '../config/env';
 
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
-const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 1000) / 1000; // 3 decimals max
+const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
 const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100; // 2 decimals max
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
@@ -14,7 +14,7 @@ const UserActivity = getUserActivityModel(USER_ADDRESS);
 
 const FAST_ATTEMPTS = 2;
 // ======== ROUND SHARE HELPER ======
-const roundShares = (x: number) => Math.floor(x * 10000) / 10000; // 4 decimal precision
+const roundShares = (x: number) => Math.floor(x * 1000) / 1000; // 4 decimal precision
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;
