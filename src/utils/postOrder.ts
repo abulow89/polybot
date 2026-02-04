@@ -106,14 +106,13 @@ const postSingleOrder = async (
   const price = formatPriceForOrder(priceRaw);
   const size = amountRaw;
 
-  // Convert to base units
-  const takerAmountBase = toBaseUnits(size, SHARE_DECIMALS);
-  
-// ✅ new makerAmount calculation
-   const takerAmount = enforceMinShares(formatTakerAmount(size));
-   const makerAmount = formatMakerAmount(takerAmount * price);
+// ✅ MODIFIED: compute takerAmount first according to API rules
+  const takerAmount = enforceMinShares(formatTakerAmount(size)); // human-readable, max 4 decimals
 
-// Define notional here
+  // ✅ MODIFIED: compute makerAmount from takerAmount and price
+  const makerAmount = formatMakerAmount(takerAmount * price); // human-readable, max 2 decimals
+
+  // Define notional here
   const notional = makerAmount;
 
   // Skip if insufficient balance
