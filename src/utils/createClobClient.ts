@@ -32,7 +32,6 @@ const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
         undefined,
         SignatureType.POLY_GNOSIS_SAFE,
         PROXY_WALLET as string,
-        provider // ⭐ FIX
     );
 
 const originalConsoleError = console.error;
