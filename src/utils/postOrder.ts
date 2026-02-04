@@ -118,15 +118,17 @@ const postSingleOrder = async (
   const price = formatPriceForOrder(priceRaw);
   const size = amountRaw;
 
-// Round takerAmount according to API max precision and enforce minimum
-  const takerAmount = enforceMinShares(formatTakerAmount(size)); // e.g., 0.01 min, max 4 decimals
-// Compute makerAmount (2 decimals max)
-  const makerAmount = formatMakerAmount(takerAmount * price);
-// Convert to integers for API
-  const takerAmountInt = toBaseUnitsInt(takerAmount, 4); // 4 decimals max for taker
-  const makerAmountInt = toBaseUnitsInt(makerAmount, 2); // 2 decimals max for maker
-  // Notional for balance check
-  const notional = makerAmount;
+const makerAmountFloat = takerAmount * price;
+
+// EXACT maker amount the order will use (ceil to cents)
+const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
+
+// Convert to integers for API (must match rounded value)
+const takerAmountInt = Math.ceil(takerAmount * 10 ** 4);
+const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** 2);
+
+// True order cost in USDC
+const notional = makerAmountRounded;
 
   // Skip if insufficient balance
   if (availableBalance !== undefined && notional > availableBalance) {
@@ -294,9 +296,23 @@ const postOrder = async (
 
             if (isNaN(askSize) || askSize <= 0) break;
             if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
-            let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
-            let sharesToBuy = Math.min(affordableShares, askSize);
-                sharesToBuy = enforceMinShares(formatTakerAmount(sharesToBuy));
+    // First pass estimate
+            let estShares = Math.min(
+                remainingUSDC / (askPriceRaw * feeMultiplier),
+                  askSize
+            );
+// Round shares exactly like order will
+            let sharesToBuy = enforceMinShares(formatTakerAmount(estShares));
+// ----- TRUE ORDER COST CALC (EXCHANGE-ACCURATE) -----
+            const makerAmountFloat = sharesToBuy * askPriceRaw;
+            const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
+            const trueOrderCost = makerAmountRounded * feeMultiplier;
+// If rounding pushed cost above budget, shrink shares slightly
+            if (trueOrderCost > remainingUSDC) {
+            sharesToBuy = enforceMinShares(
+              formatTakerAmount((remainingUSDC / feeMultiplier) / askPriceRaw)
+  );
+}
 
             console.log('sharesToBuy:', sharesToBuy);
 
@@ -308,7 +324,8 @@ const postOrder = async (
                     tokenId,
                     sharesToBuy,
                     askPriceRaw,
-                    feeRateBps
+                    feeRateBps,
+                  my_balance
                 );
             } catch (err: any) {
                 if (err.response?.data?.error) console.log(`Order failed: ${err.response.data.error}`);
@@ -317,7 +334,9 @@ const postOrder = async (
 
             if (!filled) retry++;
             else {
-                remainingUSDC -= filled * askPriceRaw * feeMultiplier;
+                const makerAmountRounded = Math.ceil((filled * askPriceRaw) * 100) / 100;
+                const trueCost = makerAmountRounded * feeMultiplier;
+                      remainingUSDC -= trueCost;
                 retry = 0;
             }
 
