@@ -90,14 +90,18 @@ const postSingleOrder = async (
     feeRateBps: number
 ) => {
 
-// ✅ ADDED: calculate takerAmount (size) and makerAmount (size * price) with correct decimal precision
-const takerAmount = Math.max(0.0001, Math.floor(amountRaw * 10000) / 10000); // 4 decimals
-const makerAmount = Math.max(0.01, Math.floor(takerAmount * priceRaw * 100) / 100); // 2 decimals
+ // ✅ ADDED: calculate takerAmount (size) and makerAmount (size * price) with correct decimal precision
+    const takerAmountFloat = Math.max(0.0001, Math.floor(amountRaw * 10000) / 10000); // 4 decimals
+    const makerAmountFloat = Math.max(0.01, Math.floor(takerAmountFloat * priceRaw * 100) / 100); // 2 decimals
 
+// 🔥 ADDED: Convert to integer atomic units (1e6)
+    const takerAmount = Math.floor(takerAmountFloat * 1e6); // ✅ added
+    const makerAmount = Math.floor(makerAmountFloat * 1e6); // ✅ added
+    
 const order_args = {
     side,
     tokenID: tokenId,
-    size: takerAmount, // ✅ modified: now using takerAmount
+    size: takerAmount,                  // ✅ modified: now integer
     price: formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000)), // ✅ remains
     feeRateBps,
     makerAmount, // ✅ added
@@ -106,14 +110,16 @@ const order_args = {
     
 console.log('--- ORDER DEBUG ---');
 console.log('Order args:', order_args);
-
+console.log('makerAmount (int):', makerAmount); // ✅ added
+console.log('takerAmount (int):', takerAmount); // ✅ added
 // ✅ NOW create the order
 const signedOrder = await safeCall(() => clobClient.createOrder(order_args));
-
 // ✅ NOW these values exist
 console.log('makerAmount:', (signedOrder as any).makerAmount);
 console.log('takerAmount:', (signedOrder as any).takerAmount);
-
+// ✅ Update exposure using float amount for internal tracking
+    if (signedOrder) updateExposure(tokenId, side, takerAmountFloat);
+    
 const notional = takerAmount * priceRaw; // ✅ modified: use takerAmount
 
 const orderType = notional >= 1
@@ -134,7 +140,7 @@ else console.log('Successfully posted order');
 // ✅ ADDED: update exposure tracking
 if (resp.success) updateExposure(tokenId, side, takerAmount)
 
-return resp.success ? takerAmount : 0;
+return resp.success ? takerAmountFloat : 0; // ✅ modified: return float internallyreturn resp.success ? takerAmount : 0;
 };
 
 // ======== MAIN POST ORDER FUNCTION ========
