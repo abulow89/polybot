@@ -128,9 +128,6 @@ const postSingleOrder = async (
     const takerAmount = Math.max(0.0001, roundTo(size, 4));  // 🔥 MODIFIED
     // enforce maker max 2 decimals
     const makerAmount = Math.max(0.01, roundTo(takerAmount * price, 2)); // 🔥 MODIFIED
-    // Calculate takerAmount (size) and makerAmount (size * price)
-    const takerAmount = Math.max(0.0001, Math.floor(size * 10000) / 10000);
-    const makerAmount = Math.max(0.01, Math.floor(takerAmount * price * 100) / 100);
 
     // Compute notional ONCE
     const notional = takerAmount * price;
