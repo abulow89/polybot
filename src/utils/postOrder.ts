@@ -14,7 +14,7 @@ const UserActivity = getUserActivityModel(USER_ADDRESS);
 
 const FAST_ATTEMPTS = 2;
 // ======== ROUND SHARE HELPER ======
-const roundShares = (x: number) => Math.floor(x * 1000) / 1000; // 4 decimal precision
+const roundShares = (x: number) => Math.floor(x * 10) / 10; // 2 decimal precision
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;
@@ -116,7 +116,7 @@ const postSingleOrder = async (
 ) => {
     // Round size and price to allowed precision
     const size = Math.max(0.01, Math.floor(amountRaw * 100) / 100);
-    const price = formatPriceForOrder(priceRaw * (1 + feeRateBps / 10000));
+    const price = formatPriceForOrder(priceRaw);
 
     // Calculate takerAmount (size) and makerAmount (size * price)
     const takerAmount = Math.max(0.0001, Math.floor(size * 10000) / 10000);
