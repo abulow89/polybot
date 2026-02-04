@@ -322,7 +322,7 @@ const postOrder = async (
             let affordableShares = remainingUSDC / (askPriceRaw * feeMultiplier);
             let sharesToBuy = Math.min(affordableShares, askSize);
              // ✅ MODIFIED: apply API decimal rules
-            sharesToBuy = Math.max(0.0001, Math.floor(sharesToBuy * 10000) / 10000);
+            sharesToBuy = Math.max(0.001, Math.floor(sharesToBuy * 1000) / 1000);
             
             console.log('sharesToBuy:', sharesToBuy);
 
