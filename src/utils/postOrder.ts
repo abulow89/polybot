@@ -146,6 +146,11 @@ console.log('makerAmount (int):', makerAmount); // ✅ added
 console.log('takerAmount (int):', takerAmount); // ✅ added
 // 🔥 MODIFIED — use resilient creator
 const signedOrder = await createOrderWithRetry(clobClient, order_args);
+    
+    if (!signedOrder) {
+    console.log('Order creation failed — signedOrder undefined');
+    return 0;
+}
 // ✅ NOW these values exist
 console.log('makerAmount:', (signedOrder as any).makerAmount);
 console.log('takerAmount:', (signedOrder as any).takerAmount);
