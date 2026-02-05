@@ -293,7 +293,6 @@ const postOrder = async (
       console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
       console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
 // Build order args for logging (mirrors what postSingleOrder will do)
-const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
 const takerAmountFinal = enforceMarketMinShares(Math.max(estShares, marketMinSafe), marketMinSafe);
 const price = formatPriceForOrder(askPriceRaw);
 const makerAmount = takerAmountFinal * price;
