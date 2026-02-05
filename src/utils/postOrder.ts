@@ -88,6 +88,7 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   marketMinSize: number,
+    orderType: OrderType,          // 🔥 NEW
   availableBalance?: number,
   feeMultiplier?: number
 ) => {
@@ -135,7 +136,65 @@ const orderArgs = {
   updateDynamicExposure(tokenId, takerAmount);
   return takerAmount;
 };
+const executeSmartOrder = async (
+  clobClient: ClobClient,
+  side: Side,
+  tokenId: string,
+  shares: number,
+  bestPrice: number,
+  feeRateBps: number,
+  marketMinSize: number,
+  feeMultiplier: number,
+  availableBalance?: number
+) => {
 
+  // 🎯 Try slightly better price than best bid/ask
+  const improvement = 0.01; // 1 cent improvement
+  const makerPrice =
+    side === Side.BUY
+      ? bestPrice - improvement
+      : bestPrice + improvement;
+
+  console.log(`[SMART] Trying MAKER limit first at $${makerPrice.toFixed(2)}`);
+
+  // 1️⃣ Try resting LIMIT order
+  const makerFilled = await postSingleOrder(
+    clobClient,
+    side,
+    tokenId,
+    shares,
+    makerPrice,
+    feeRateBps,
+    marketMinSize,
+    OrderType.GTC,        // Good-Til-Cancel = maker
+    availableBalance,
+    feeMultiplier
+  );
+
+  if (makerFilled > 0) {
+    console.log(`[SMART] Maker order filled ${makerFilled}`);
+    return makerFilled;
+  }
+
+  // 2️⃣ Wait briefly
+  await sleep(200);
+
+  console.log(`[SMART] Maker didn't fill — switching to IOC taker`);
+
+  // 3️⃣ Fallback to IOC (taker)
+  return await postSingleOrder(
+    clobClient,
+    side,
+    tokenId,
+    shares,
+    bestPrice,
+    feeRateBps,
+    marketMinSize,
+    OrderType.IOC,
+    availableBalance,
+    feeMultiplier
+  );
+};
 // ======== MAIN POST ORDER FUNCTION ========
 const postOrder = async (
   clobClient: ClobClient,
@@ -202,17 +261,16 @@ const postOrder = async (
         orderBook.bids[0]
       );
 
-      const filled = await postSingleOrder(
-        clobClient,
-        Side.SELL,
-        tokenId,
-        Math.min(remaining, parseFloat(maxPriceBid.size)),
-        parseFloat(maxPriceBid.price),
-        feeRateBps,
-        marketMinSize,
-        market,
-        feeMultiplier
-      );
+      const filled = await executeSmartOrder(
+  clobClient,
+  Side.SELL,
+  tokenId,
+  Math.min(remaining, parseFloat(maxPriceBid.size)),
+  parseFloat(maxPriceBid.price),
+  feeRateBps,
+  marketMinSize,
+  feeMultiplier
+);
 
       if (!filled) retry++;
       else {
@@ -304,17 +362,17 @@ const postOrder = async (
         break;
       }
 
-      const filled = await postSingleOrder(
-        clobClient,
-        Side.BUY,
-        tokenId,
-        sharesToBuy,
-        askPriceRaw,
-        feeRateBps,
-        my_balance,
-        market,
-        feeMultiplier
-      );
+      const filled = await executeSmartOrder(
+  clobClient,
+  Side.BUY,
+  tokenId,
+  sharesToBuy,
+  askPriceRaw,
+  feeRateBps,
+  marketMinSize,
+  feeMultiplier,
+  my_balance
+);
 
       if (!filled) retry++;
       else {
