@@ -87,8 +87,8 @@ const postSingleOrder = async (
   amountRaw: number,
   priceRaw: number,
   feeRateBps: number,
-  availableBalance?: number,
   marketMinSize: number,
+  availableBalance?: number,
   feeMultiplier?: number
 ) => {
   
