@@ -67,15 +67,6 @@ const createOrderWithRetry = async (
     }
   }
 };
-// ======== HELPER: convert to base units ========
-const toBaseUnitsInt = (amount: number, decimals: number) => {
-  return Math.ceil(amount * 10 ** decimals); // round up to ensure minimums
-};
-
-// ======== HELPER: convert back to float for logging ========
-const fromBaseUnitsInt = (amountInt: number, decimals: number) => {
-  return amountInt / 10 ** decimals;
-};
 // ======== HELPER: enforce market minimum and rounding ========
 const enforceMarketMinShares = (shares: number, marketMin?: number) => {
   const min = marketMin ?? 0.001;
@@ -124,24 +115,22 @@ const takerAmountRounded = formatTakerAmount(takerAmountFinal); // 4 decimals
 
 const makerAmountFloat = takerAmountRounded * price;
 
-// Exchange rounds UP to cents
-const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
-
-// ===== BASE UNIT CONVERSION =====
+// ===== BASE UNIT CONVERSION (FIXED) =====
 const SHARE_DECIMALS = 4;
 const USDC_DECIMALS = 6;
 
-const takerAmountInt = Math.ceil(takerAmountRounded * 10 ** SHARE_DECIMALS);
-const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
+// Don't round to cents first - work with full precision
+const takerAmountInt = Math.floor(takerAmountRounded * 10 ** SHARE_DECIMALS);
+const makerAmountInt = Math.floor(makerAmountFloat * 10 ** USDC_DECIMALS);
 
 const orderArgs = {
   side,
   tokenID: tokenId,
-  size: takerAmountInt.toString(),        // ✅ integer base units
+  size: takerAmountInt.toString(),
   price: price.toFixed(2),
   feeRateBps,
-  makerAmount: makerAmountInt.toString(), // ✅ integer base units
-  takerAmount: takerAmountInt.toString(), // ✅ integer base units
+  makerAmount: makerAmountInt.toString(), 
+  takerAmount: takerAmountInt.toString(),
 };
 
   const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
