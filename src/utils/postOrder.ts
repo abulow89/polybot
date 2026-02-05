@@ -292,6 +292,24 @@ const postOrder = async (
       console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw.toFixed(2)}`);
       console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
       console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
+// Build order args for logging (mirrors what postSingleOrder will do)
+const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
+const takerAmountFinal = enforceMarketMinShares(Math.max(estShares, marketMinSafe), marketMinSafe);
+const price = formatPriceForOrder(askPriceRaw);
+const makerAmount = takerAmountFinal * price;
+
+const orderArgsLog = {
+  side: Side.BUY,
+  tokenID: tokenId,
+  size: takerAmountFinal.toString(),
+  price: price.toFixed(2),
+  feeRateBps,
+  makerAmount: Math.floor(makerAmount * 1e6).toString(),
+  takerAmount: Math.floor(takerAmountFinal * 1e4).toString(),
+  feeMultiplier,
+};
+
+console.log('  [ORDER ARGS]', orderArgsLog);
 
       if (remainingUSDC < 0.01) {
         console.log(`[SKIP ORDER] Remaining USDC too low (${remainingUSDC.toFixed(6)}), skipping...`);
