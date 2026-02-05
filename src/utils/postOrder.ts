@@ -244,16 +244,16 @@ const postOrder = async (
     const targetExposureValue = userExposurePct * myPortfolio;
 
     const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
-
-    let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
-    remainingUSDC = Math.min(remainingUSDC, my_balance);
-
     console.log(`[BUY] Mirroring user exposure (scaled by portfolio ratio):`);
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(2)}%`);
     console.log(`  Scale factor (my_balance/user_balance): ${scaleFactor.toFixed(4)}`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(2)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
+    let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
+    remainingUSDC = Math.min(remainingUSDC, my_balance);
+
+
 
     let retry = 0;
     while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
