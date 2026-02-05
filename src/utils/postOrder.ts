@@ -209,7 +209,7 @@ const postOrder = async (
         Math.min(remaining, parseFloat(maxPriceBid.size)),
         parseFloat(maxPriceBid.price),
         feeRateBps,
-        undefined,
+        marketMinSize,
         market,
         feeMultiplier
       );
