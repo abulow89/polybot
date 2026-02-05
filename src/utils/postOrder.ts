@@ -101,28 +101,33 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   availableBalance?: number,
-  market?: { minOrderSize?: number }
+  market?: { minOrderSize?: number },
+  feeMultiplier?: number
 ) => {
   const marketMinSize = market?.minOrderSize ?? 0;
+  const effectiveFeeMultiplier = feeMultiplier ?? 1;
 
   // ===== PRICE + SIZE =====
-const price = formatPriceForOrder(priceRaw);
-const takerAmount = enforceMarketMinShares(amountRaw, market?.minOrderSize);
+  const price = formatPriceForOrder(priceRaw);
+  let takerAmount = enforceMarketMinShares(amountRaw, marketMinSize);
 
-/// ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
-const totalCost = takerAmount * price * feeMultiplier; // exact cost
-if (availableBalance !== undefined && totalCost > availableBalance) {
-  console.log(
-    `[SKIP ORDER] Insufficient balance: need ${totalCost.toFixed(6)}, have ${availableBalance}`
-  );
-  return 0;
-}
-  // ===== BASE UNITS =====
-const USDC_DECIMALS = 6;
-const SHARE_DECIMALS = 4;
-const takerAmountInt = Math.max(1, Math.floor(takerAmount * 10 ** SHARE_DECIMALS));
-const makerAmountInt = Math.max(1, Math.floor(takerAmount * price * 10 ** USDC_DECIMALS));
+  // ===== BALANCE CHECK (BUY ONLY) =====
+  const totalCost = takerAmount * price * effectiveFeeMultiplier;
+  if (availableBalance !== undefined && totalCost > availableBalance) {
+    console.log(
+      `[SKIP ORDER] Insufficient balance: need ${totalCost.toFixed(6)}, have ${availableBalance}`
+    );
+    return 0;
+  }
 
+  // ===== BASE UNITS (integer conversion for API) =====
+  const USDC_DECIMALS = 6;
+  const SHARE_DECIMALS = 4;
+
+  const takerAmountInt = Math.max(1, Math.floor(takerAmount * 10 ** SHARE_DECIMALS)); // minimum 1 unit
+  const makerAmountInt = Math.max(1, Math.floor(takerAmount * price * 10 ** USDC_DECIMALS)); // minimum 1 unit
+
+  // ===== FINAL ORDER ARGS =====
   const order_args = {
     side,
     tokenID: tokenId,
@@ -139,8 +144,10 @@ const makerAmountInt = Math.max(1, Math.floor(takerAmount * price * 10 ** USDC_D
     takerAmountInt,
     makerAmountInt,
     totalCost,
+    marketMinSize,
   });
 
+  // ===== CREATE & POST ORDER =====
   const signedOrder = await createOrderWithRetry(clobClient, order_args);
   if (!signedOrder) return 0;
 
@@ -155,7 +162,6 @@ const makerAmountInt = Math.max(1, Math.floor(takerAmount * price * 10 ** USDC_D
 
   return takerAmount;
 };
-
 // ======== MAIN POST ORDER FUNCTION ========
 const postOrder = async (
   clobClient: ClobClient,
@@ -231,7 +237,8 @@ const postOrder = async (
         parseFloat(maxPriceBid.price),
         feeRateBps,
         undefined,
-        market
+        market,
+        feeMultiplier
       );
 
       if (!filled) retry++;
@@ -299,7 +306,8 @@ const postOrder = async (
         askPriceRaw,
         feeRateBps,
         my_balance,
-        market
+        market,
+        feeMultiplier
       );
 
       if (!filled) retry++;
