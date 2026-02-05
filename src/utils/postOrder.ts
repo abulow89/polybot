@@ -109,7 +109,7 @@ const postSingleOrder = async (
 const price = formatPriceForOrder(priceRaw);
 const takerAmount = enforceMarketMinShares(amountRaw, market?.minOrderSize);
 
-// ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
+/// ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
 const totalCost = takerAmount * price * feeMultiplier; // exact cost
 if (availableBalance !== undefined && totalCost > availableBalance) {
   console.log(
@@ -117,7 +117,6 @@ if (availableBalance !== undefined && totalCost > availableBalance) {
   );
   return 0;
 }
-
   // ===== BASE UNITS =====
 const USDC_DECIMALS = 6;
 const SHARE_DECIMALS = 4;
