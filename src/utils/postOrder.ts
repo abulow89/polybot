@@ -2,7 +2,13 @@ import { ClobClient, OrderType, Side} from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
-
+// Temporary fix: extend the enum locally
+enum ExtendedOrderType {
+    GTC = "GTC",
+    FOK = "FOK",
+    IOC = "IOC",
+    FAK = "FAK",  // add FAK manually
+}
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
@@ -88,7 +94,7 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   marketMinSize: number,
-    orderType: OrderType,          // 🔥 NEW
+    extendedOrderType: OrderType.FAK,          // 🔥 NEW
   availableBalance?: number,
   feeMultiplier?: number
 ) => {
@@ -144,6 +150,7 @@ const executeSmartOrder = async (
   bestPrice: number,
   feeRateBps: number,
   marketMinSize: number,
+    ExtendedOrderType.FAK,  // ✅
   feeMultiplier: number,
   availableBalance?: number
 ) => {
@@ -190,7 +197,7 @@ const executeSmartOrder = async (
     bestPrice,
     feeRateBps,
     marketMinSize,
-    OrderType.FOK,
+    extendedOrderType.FAK,
     availableBalance,
     feeMultiplier
   );
