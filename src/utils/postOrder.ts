@@ -259,75 +259,87 @@ const postOrder = async (
     await updateActivity();
   }
 
-  // ======== BUY ========
-  else if (condition === 'buy') {
-    console.log('Buy Strategy...');
-    const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-    let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
-    let retry = 0;
+// ======== BUY ========
+else if (condition === 'buy') {
+  console.log('Buy Strategy...');
+  const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
+  let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
+  let retry = 0;
 
-    while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-      if (retry >= FAST_ATTEMPTS) 
-          await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
+  while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
+    if (retry >= FAST_ATTEMPTS) 
+      await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
 
-      let orderBook;
-      try {
-        orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-        if (!orderBook || !orderBook.asks?.length) break;
-      } catch (err: any) {
-        if (err.response?.status === 404) break;
-        throw err;
-      }
-
-      const minPriceAsk = orderBook.asks.reduce(
-        (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
-        orderBook.asks[0]
-      );
-
-      const askPriceRaw = parseFloat(minPriceAsk.price);
-      const askSize = parseFloat(minPriceAsk.size);
-      if (isNaN(askSize) || askSize <= 0) break;
-      if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
-
-      // Estimate shares affordable
-      let estShares = Math.min(
-          remainingUSDC / (askPriceRaw * feeMultiplier),
-          askSize
-      );
-
-    // ✅ enforce market minimum here dynamically
-    const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001; // fallback
-    estShares = Math.max(estShares, marketMinSafe); 
-    estShares = enforceMarketMinShares(estShares, marketMinSafe);
-// Skip if still zero after rounding or tiny balance
-if (estShares <= 0 || remainingUSDC < 0.01) {
-  console.log('[SKIP ORDER] Estimated shares too small or balance too low, skipping...');
-  break;
-}
-
-      const filled = await postSingleOrder(
-        clobClient,
-        Side.BUY,
-        tokenId,
-        estShares,
-        askPriceRaw,
-        feeRateBps,
-        my_balance,
-        market,
-        feeMultiplier
-      );
-
-      if (!filled) retry++;
-      else {
-        const totalCost = filled * askPriceRaw * feeMultiplier;
-                remainingUSDC -= totalCost;
-        retry = 0;
-      }
-
-      if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+    let orderBook;
+    try {
+      orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+      if (!orderBook || !orderBook.asks?.length) break;
+    } catch (err: any) {
+      if (err.response?.status === 404) break;
+      throw err;
     }
 
-    await updateActivity();
+    const minPriceAsk = orderBook.asks.reduce(
+      (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
+      orderBook.asks[0]
+    );
+
+    const askPriceRaw = parseFloat(minPriceAsk.price);
+    const askSize = parseFloat(minPriceAsk.size);
+    if (isNaN(askSize) || askSize <= 0) break;
+    if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
+
+    // Estimate shares affordable
+    let estShares = Math.min(
+      remainingUSDC / (askPriceRaw * feeMultiplier),
+      askSize
+    );
+
+    // ✅ enforce market minimum
+    const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
+    estShares = Math.max(estShares, marketMinSafe);
+
+      // Round up to market minimum / tick size
+    const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001; // fallback
+    estShares = Math.max(estShares, marketMinSafe); 
+    estShares = enforceMarketMinShares(estShares, marketMinSafe); // rounds DOWN to 4 decimals but always >= min
+
+    // Skip only if remaining USDC is too low
+    if (remainingUSDC < 0.01) {
+      console.log(`[SKIP ORDER] Remaining USDC too low (${remainingUSDC.toFixed(6)}), 
+      estShares: estShares.toFixed(6),
+      remainingUSDC: remainingUSDC.toFixed(6),
+      price: askPriceRaw.toFixed(6),
+      feeMultiplier: feeMultiplier.toFixed(4),
+      marketMinSafe: marketMinSafe.toFixed(6),
+      totalCost: totalCost.toFixed(6),
+      skipping...`);
+      break;
+    }
+     
+    const filled = await postSingleOrder(
+      clobClient,
+      Side.BUY,
+      tokenId,
+      estShares,
+      askPriceRaw,
+      feeRateBps,
+      my_balance,
+      market,
+      feeMultiplier
+    );
+
+    if (!filled) retry++;
+    else {
+      const totalCost = filled * askPriceRaw * feeMultiplier;
+      remainingUSDC -= totalCost;
+      retry = 0;
+    }
+
+    if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+  }
+
+  await updateActivity();
 }
 
    else {
