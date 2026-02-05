@@ -168,7 +168,7 @@ const postOrder = async (
 
   const feeRateBps = market?.taker_base_fee ?? 0;
   const feeMultiplier = 1 + feeRateBps / 10000;
-  const marketMinSize = market?.minOrderSize ?? 0;
+  const marketMinSize = market?.minOrderSize ?? 0.001;
 
   console.log('Market info:', market);
   console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
