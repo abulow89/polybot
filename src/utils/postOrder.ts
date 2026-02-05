@@ -91,7 +91,7 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   availableBalance?: number,
-  market?: { minOrderSize?: number },
+  market?: { minimumOrderSize?: number },
   feeMultiplier?: number
 ) => {
   const marketMinSize = market?.minimumOrderSize ?? 1;
