@@ -150,7 +150,7 @@ const executeSmartOrder = async (
   bestPrice: number,
   feeRateBps: number,
   marketMinSize: number,
-    ExtendedOrderType.FAK,  // ✅
+ extendedOrderType: OrderType.FAK,          // 🔥 NEW
   feeMultiplier: number,
   availableBalance?: number
 ) => {
