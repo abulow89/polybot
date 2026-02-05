@@ -6,33 +6,16 @@ import { ENV } from '../config/env';
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
-
-// FIXED: makerAmount rounding — round to 2 decimals instead of flooring
-const formatMakerAmount = (a: number) => Math.round(a * 100) / 100; // 2 decimals max
-
 // Taker amount rounding — round down to 4 decimals (max accuracy for API)
 const formatTakerAmount = (a: number) => Math.floor(a * 10000) / 10000; // 4 decimals max
 
 const MIN_SHARES = 0.01;
-// ====== HELPER: MINIMUM AMOUNTS ======
-const MIN_MAKER_AMOUNT = 0.01; // 🔹 added
-const enforceMinMakerAmount = (amount: number) => Math.max(MIN_MAKER_AMOUNT, amount); // 🔹 added
 const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
-const USDC_DECIMALS = 6;
-const SHARE_DECIMALS = 6;
-
-const toBaseUnits = (x: number, decimals: number) =>
-  Math.floor(x * 10 ** decimals);
-
-const fromBaseUnits = (x: number, decimals: number) =>
-  x / 10 ** decimals;
 const FAST_ATTEMPTS = 2;
-// ======== ROUND SHARE HELPER ======
-const roundShares = (x: number) => Math.floor(x * 10) / 10; // 2 decimal precision
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;
@@ -115,26 +98,28 @@ const postSingleOrder = async (
   feeRateBps: number,
   availableBalance?: number
 ) => {
+// ================= PRICE + SIZE NORMALIZATION =================
   const price = formatPriceForOrder(priceRaw);
-  const size = amountRaw;
-
-const makerAmountFloat = takerAmount * price;
-
-// EXACT maker amount the order will use (ceil to cents)
-const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
-
-// Convert to integers for API (must match rounded value)
-const takerAmountInt = Math.ceil(takerAmount * 10 ** 4);
-const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** 2);
-
-// True order cost in USDC
-const notional = makerAmountRounded;
-
-  // Skip if insufficient balance
-  if (availableBalance !== undefined && notional > availableBalance) {
-    console.log(`[SKIP ORDER] Insufficient balance: notional=${notional.toFixed(4)}, available=${availableBalance.toFixed(4)}`);
+// Round shares to exchange precision
+  const takerAmount = enforceMinShares(formatTakerAmount(amountRaw));
+// ================= EXCHANGE COST MATH =================
+  const makerAmountFloat = takerAmount * price;
+ // Exchange rounds UP to cents
+  const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
+// ===== 4️⃣ BALANCE CHECK (BUY ONLY EFFECTIVE) =====
+  if (availableBalance !== undefined && makerAmountRounded > availableBalance) {
+    console.log(
+      `[SKIP ORDER] Insufficient balance: need ${makerAmountRounded}, have ${availableBalance}`
+    );
     return 0;
   }
+   // ===== 5️⃣ CONVERT TO INTEGERS FOR SIGNING =====
+  const takerAmountInt = Math.ceil(takerAmount * 10 ** 4);
+  const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** 2);
+ // True order cost
+  const notional = makerAmountRounded;
+ 
+  
  const order_args = {
     side,
     tokenID: tokenId,
@@ -144,23 +129,32 @@ const notional = makerAmountRounded;
     makerAmount: makerAmountInt.toString(), // send integer as string
     takerAmount: takerAmountInt.toString(), // send integer as string
   };
+// ===== 6️⃣ BUILD ORDER =====
+   console.log('===== FINAL ORDER =====');
+  console.log({
+    price,
+    takerAmount,
+    makerAmountRounded,
+    takerAmountInt,
+    makerAmountInt,
+  });
 
-  console.log('===== RAW ORDER DEBUG =====');
-  console.log('Order args:', order_args);
-  console.log('makerAmount:', makerAmount);
-  console.log('takerAmount:', takerAmount);
-
+// ===== 7️⃣ SIGN =====
   const signedOrder = await createOrderWithRetry(clobClient, order_args);
   if (!signedOrder) return 0;
 
+  // ===== 8️⃣ POST =====
+  const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
+
+  if (!resp.success) {
+    console.log('Error posting order:', resp.error ?? resp);
+    return 0;
+  }
+
+  console.log('Successfully posted order');
   updateExposure(tokenId, side, takerAmount);
-  const orderType = OrderType.FOK;
 
-  const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
-  if (!resp.success) console.log('Error posting order:', resp.error ?? resp);
-  else console.log('Successfully posted order');
-
-  return resp.success ? takerAmount : 0;
+  return takerAmount; // return shares filled
 };
 
 // ======== MAIN POST ORDER FUNCTION ========
@@ -296,25 +290,16 @@ const postOrder = async (
 
             if (isNaN(askSize) || askSize <= 0) break;
             if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
-    // First pass estimate
-            let estShares = Math.min(
-                remainingUSDC / (askPriceRaw * feeMultiplier),
-                  askSize
-            );
-// Round shares exactly like order will
-            let sharesToBuy = enforceMinShares(formatTakerAmount(estShares));
-// ----- TRUE ORDER COST CALC (EXCHANGE-ACCURATE) -----
-            const makerAmountFloat = sharesToBuy * askPriceRaw;
-            const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
-            const trueOrderCost = makerAmountRounded * feeMultiplier;
-// If rounding pushed cost above budget, shrink shares slightly
-            if (trueOrderCost > remainingUSDC) {
-            sharesToBuy = enforceMinShares(
-              formatTakerAmount((remainingUSDC / feeMultiplier) / askPriceRaw)
-  );
-}
+// Estimate shares affordable
+          let estShares = Math.min(
+          remainingUSDC / (askPriceRaw * feeMultiplier),
+          askSize
+          );
 
-            console.log('sharesToBuy:', sharesToBuy);
+// Round exactly like order will
+        let sharesToBuy = enforceMinShares(formatTakerAmount(estShares));
+
+      console.log('sharesToBuy:', sharesToBuy);
 
             let filled = 0;
             try {
@@ -334,10 +319,10 @@ const postOrder = async (
 
             if (!filled) retry++;
             else {
-                const makerAmountRounded = Math.ceil((filled * askPriceRaw) * 100) / 100;
-                const trueCost = makerAmountRounded * feeMultiplier;
-                      remainingUSDC -= trueCost;
-                retry = 0;
+// Must match postSingleOrder math EXACTLY
+            const makerAmountRounded = Math.ceil((filled * askPriceRaw) * 100) / 100;
+                  remainingUSDC -= makerAmountRounded * feeMultiplier;
+                  retry = 0;
             }
 
             if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
