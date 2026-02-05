@@ -93,8 +93,8 @@ const updateDynamicExposure = (tokenId: string, filled: number) => {
   dynamicExposure[tokenId] += filled;
   console.log(`[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
 };
-// ======== POST SINGLE ORDER (simplified) ===================================================================================
-const postSingleOrder = async (
+// ======== MAIN POST ORDER FUNCTION ========
+const postOrder = async (
   clobClient: ClobClient,
   condition: string,
   my_position: UserPositionInterface | undefined,
@@ -182,24 +182,28 @@ const postSingleOrder = async (
 
     await updateActivity();
   }
+
   // ======== BUY ========
   else if (condition === 'buy') {
     console.log('Buy Strategy...');
 
-    // ===== DYNAMIC EXPOSURE CALCULATION (MIRROR USER EXPOSURE) =====
+    // ===== DYNAMIC EXPOSURE CALCULATION (MIRROR USER EXPOSURE + SCALE) =====
     const userPortfolio = user_balance + (user_position?.size ?? 0) * trade.price;
     const userExposurePct = trade.usdcSize / Math.max(userPortfolio, 1);
 
+    // Scale your exposure proportional to your balance relative to the user
     const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
-    const targetExposureValue = myPortfolio * userExposurePct;
+    const scaleFactor = my_balance / Math.max(user_balance, 1); // prevents divide by zero
+    const targetExposureValue = userExposurePct * myPortfolio * scaleFactor;
 
     const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
 
     let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
     remainingUSDC = Math.min(remainingUSDC, my_balance);
 
-    console.log(`[BUY] Mirroring user exposure:`);
+    console.log(`[BUY] Mirroring user exposure (scaled by portfolio ratio):`);
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(2)}%`);
+    console.log(`  Scale factor (my_balance/user_balance): ${scaleFactor.toFixed(4)}`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(2)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
@@ -228,13 +232,14 @@ const postSingleOrder = async (
       if (isNaN(askSize) || askSize <= 0) break;
       if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
+      // Estimate shares affordable
       let estShares = Math.min(
         remainingUSDC / (askPriceRaw * feeMultiplier),
         askSize
       );
 
       const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
-      estShares = Math.max(estShares, marketMinSafe); 
+      estShares = Math.max(estShares, marketMinSafe);
       estShares = enforceMarketMinShares(estShares, marketMinSafe);
 
       console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw.toFixed(2)}`);
@@ -275,7 +280,7 @@ const postSingleOrder = async (
 
     await updateActivity();
   }
-  // ======== UNSUPPORTED CONDITION ========
+
   else {
     console.log('Condition not supported');
   }
