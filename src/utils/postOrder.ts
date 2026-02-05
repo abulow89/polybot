@@ -106,14 +106,23 @@ const postSingleOrder = async (
   const makerAmountFloat = takerAmount * price;
  // Exchange rounds UP to cents
   const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
-// ===== 4️⃣ BALANCE CHECK (BUY ONLY EFFECTIVE) =====
+// ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
   if (availableBalance !== undefined && makerAmountRounded > availableBalance) {
     console.log(
       `[SKIP ORDER] Insufficient balance: need ${makerAmountRounded}, have ${availableBalance}`
     );
     return 0;
   }
-   // ===== 5️⃣ CONVERT TO INTEGERS FOR SIGNING =====
+    // ====== ALLOWANCE CHECK======
+const ensureAllowance = async (clobClient: ClobClient, owner: string, requiredAmountInt: number) => {
+    const currentAllowance = await clobClient.getAllowance(owner); // returns integer in USDC base units
+    if (currentAllowance >= requiredAmountInt) return;
+
+    console.log(`[ALLOWANCE] Insufficient allowance (${currentAllowance} < ${requiredAmountInt}), approving...`);
+    await clobClient.approve(requiredAmountInt); // approve enough USDC
+    console.log('[ALLOWANCE] Approval complete');
+};
+   // =====  CONVERT TO INTEGERS FOR SIGNING =====
 const USDC_DECIMALS = 6;
 const SHARE_DECIMALS = 4; // taker shares precision
 const takerAmountInt = Math.ceil(takerAmount * 10 ** SHARE_DECIMALS);
@@ -131,7 +140,7 @@ const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
     makerAmount: makerAmountInt.toString(), // send integer as string
     takerAmount: takerAmountInt.toString(), // send integer as string
   };
-// ===== 6️⃣ BUILD ORDER =====
+// ===== BUILD ORDER =====
    console.log('===== FINAL ORDER =====');
   console.log({
     price,
@@ -140,14 +149,13 @@ const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
     takerAmountInt,
     makerAmountInt,
   });
-
-// ===== 7️⃣ SIGN =====
+// =====  ENSURE ALLOWANCE =====
+await ensureAllowance(clobClient, USER_ADDRESS, makerAmountInt);
+// =====  SIGN =====
   const signedOrder = await createOrderWithRetry(clobClient, order_args);
   if (!signedOrder) return 0;
-
-  // ===== 8️⃣ POST =====
+  // =====  POST =====
   const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
-
   if (!resp.success) {
     console.log('Error posting order:', resp.error ?? resp);
     return 0;
