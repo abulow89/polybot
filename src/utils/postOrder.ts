@@ -168,8 +168,7 @@ const postOrder = async (
   console.log('Market info:', market);
   console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
   console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
-// 🔹 Add log here for clarity
-console.log(`[ORDER ATTEMPT] Trying to BUY ${sharesToBuy} shares of ${tokenId} at $${askPriceRaw.toFixed(2)} each`);
+
   // ======== SELL / MERGE ========
   if (condition === 'merge' || condition === 'sell') {
     console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
@@ -249,7 +248,8 @@ console.log(`[ORDER ATTEMPT] Trying to BUY ${sharesToBuy} shares of ${tokenId} a
     remainingUSDC = Math.min(remainingUSDC, my_balance);
 
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
-
+// 🔹 Add log here for clarity
+console.log(`[ORDER ATTEMPT] Trying to BUY ${sharesToBuy} shares of ${tokenId} at $${askPriceRaw.toFixed(2)} each`);
     let retry = 0;
     while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
       if (retry >= FAST_ATTEMPTS) 
@@ -297,8 +297,7 @@ console.log(`[ORDER ATTEMPT] Trying to BUY ${sharesToBuy} shares of ${tokenId} a
       
       // Round exactly like order will (MATCHES SCRIPT1)
       const sharesToBuy = formatTakerAmount(Math.max(estShares, marketMinSafe));
-// 🔹 Add log here for clarity
-console.log(`[ORDER ATTEMPT] Trying to BUY ${sharesToBuy} shares of ${tokenId} at $${askPriceRaw.toFixed(2)} each`);
+
       console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
       console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
       console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
