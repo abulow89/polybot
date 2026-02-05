@@ -241,8 +241,7 @@ const postOrder = async (
 
     // Scale your exposure proportional to your balance relative to the user
     const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
-    const scaleFactor = my_balance / Math.max(user_balance, 1); // prevents divide by zero
-    const targetExposureValue = userExposurePct * myPortfolio * scaleFactor;
+    const targetExposureValue = userExposurePct * myPortfolio;
 
     const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
 
