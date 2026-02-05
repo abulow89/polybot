@@ -94,7 +94,7 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   marketMinSize: number,
-    extendedOrderType.FAK,          // 🔥 NEW
+    extendedOrderType,FAK,          // 🔥 NEW
   availableBalance?: number,
   feeMultiplier?: number
 ) => {
@@ -150,7 +150,7 @@ const executeSmartOrder = async (
   bestPrice: number,
   feeRateBps: number,
   marketMinSize: number,
- extendedOrderType.FAK,          // 🔥 NEW
+ extendedOrderType,FAK,          // 🔥 NEW
   feeMultiplier: number,
   availableBalance?: number
 ) => {
