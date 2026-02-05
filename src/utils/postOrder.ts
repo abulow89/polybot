@@ -1,4 +1,4 @@
-import { ClobClient, OrderType, Side, Market } from '@polymarket/clob-client';
+import { ClobClient, OrderType, Side} from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
