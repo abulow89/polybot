@@ -256,11 +256,11 @@ const postOrder = async (
 
     // Scale your exposure proportional to your balance relative to the user
     const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
-    const targetExposureValue = userExposurePct * (myPortfolio*10);
+    const targetExposureValue = userExposurePct * myPortfolio;
 
     const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
       
-    console.log(`[BUY] Mirroring user exposure (scaled by x10):`);
+    console.log(`[BUY] Mirroring user exposure (relative to balance):`);
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(2)}%`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(2)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
