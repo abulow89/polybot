@@ -114,8 +114,10 @@ const postSingleOrder = async (
     return 0;
   }
    // ===== 5️⃣ CONVERT TO INTEGERS FOR SIGNING =====
-  const takerAmountInt = Math.ceil(takerAmount * 10 ** 4);
-  const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** 2);
+const USDC_DECIMALS = 6;
+const SHARE_DECIMALS = 4; // taker shares precision
+const takerAmountInt = Math.ceil(takerAmount * 10 ** SHARE_DECIMALS);
+const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
  // True order cost
   const notional = makerAmountRounded;
  
