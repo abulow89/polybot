@@ -114,8 +114,8 @@ if (availableBalance !== undefined && makerAmountFloat * effectiveFeeMultiplier 
 }
 
 // ===== CONVERT TO BASE UNITS =====
-const SHARE_DECIMALS = 4;
-const USDC_DECIMALS = 6;
+const SHARE_DECIMALS = 6;  // API uses 6 decimals for shares
+const USDC_DECIMALS = 4;   // API uses 4 decimals for USDC (not 6!)
 
 const takerAmountInt = Math.floor(takerAmount * 10 ** SHARE_DECIMALS);
 const makerAmountInt = Math.floor(makerAmountFloat * 10 ** USDC_DECIMALS);
