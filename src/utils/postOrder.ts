@@ -168,7 +168,8 @@ const postOrder = async (
   console.log('Market info:', market);
   console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
   console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
-
+// 🔹 Add log here for clarity
+console.log(`[ORDER ATTEMPT] Trying to BUY ${sharesToBuy} shares of ${tokenId} at $${askPriceRaw.toFixed(2)} each`);
   // ======== SELL / MERGE ========
   if (condition === 'merge' || condition === 'sell') {
     console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
