@@ -105,15 +105,9 @@ const postSingleOrder = async (
 ) => {
   const marketMinSize = market?.minOrderSize ?? 0;
 
-  // ================= PRICE + SIZE NORMALIZATION =================
-  const price = formatPriceForOrder(priceRaw);
-
-  // Round shares to exchange precision and enforce market minimum
-  const takerAmount = enforceMarketMinShares(amountRaw, marketMinSize);
-
-  // ================= EXCHANGE COST MATH =================
-  const makerAmountFloat = takerAmount * price;
-  const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100; // round up to cents
+  // ===== PRICE + SIZE =====
+const price = formatPriceForOrder(priceRaw);
+const takerAmount = enforceMarketMinShares(amountRaw, market?.minOrderSize);
 
   // ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
   if (availableBalance !== undefined && makerAmountRounded > availableBalance) {
@@ -123,11 +117,11 @@ const postSingleOrder = async (
     return 0;
   }
 
-  // ===== CONVERT TO INTEGERS FOR SIGNING =====
-  const USDC_DECIMALS = 6;
-  const SHARE_DECIMALS = 4;
-  const takerAmountInt = Math.ceil(takerAmount * 10 ** SHARE_DECIMALS);
-  const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
+  // ===== BASE UNITS =====
+const USDC_DECIMALS = 6;
+const SHARE_DECIMALS = 4;
+const takerAmountInt = Math.max(1, Math.floor(takerAmount * 10 ** SHARE_DECIMALS));
+const makerAmountInt = Math.max(1, Math.floor(takerAmount * price * 10 ** USDC_DECIMALS));
 
   const order_args = {
     side,
@@ -150,7 +144,7 @@ const postSingleOrder = async (
   const signedOrder = await createOrderWithRetry(clobClient, order_args);
   if (!signedOrder) return 0;
 
-  const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.GTC));
+  const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
   if (!resp.success) {
     console.log('Error posting order:', resp.error ?? resp);
     return 0;
