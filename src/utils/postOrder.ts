@@ -104,7 +104,8 @@ const postSingleOrder = async (
   market?: { minOrderSize?: number },
   feeMultiplier?: number
 ) => {
-  const marketMinSize = market?.minOrderSize ?? 0;
+    // ===== MARKET MINIMUM =====
+  const marketMinSize = market?.minOrderSize ?? 0.001; // fallback minimum
   const effectiveFeeMultiplier = feeMultiplier ?? 1;
 
   // ===== PRICE + SIZE =====
@@ -123,10 +124,15 @@ const postSingleOrder = async (
   // ===== BASE UNITS (integer conversion for API) =====
   const USDC_DECIMALS = 6;
   const SHARE_DECIMALS = 4;
+// prevent too-small orders
+  const minTakerAmount = 0.0001; // at least 0.0001 shares
+  const minMakerAmount = 0.001;  // at least 0.001 USDC
 
-  const takerAmountInt = Math.max(1, Math.floor(takerAmount * 10 ** SHARE_DECIMALS)); // minimum 1 unit
-  const makerAmountInt = Math.max(1, Math.floor(takerAmount * price * 10 ** USDC_DECIMALS)); // minimum 1 unit
+  const takerAmountSafe = Math.max(takerAmount, minTakerAmount);
+  const makerAmountSafe = Math.max(takerAmount * price, minMakerAmount);
 
+  const takerAmountInt = Math.max(1, Math.floor(takerAmountSafe * 10 ** SHARE_DECIMALS));
+  const makerAmountInt = Math.max(1, Math.floor(makerAmountSafe * 10 ** USDC_DECIMALS));
   // ===== FINAL ORDER ARGS =====
   const order_args = {
     side,
@@ -289,14 +295,15 @@ const postOrder = async (
           askSize
       );
 
-      // ✅ enforce market minimum here
-      estShares = enforceMarketMinShares(estShares, marketMinSize);
-
-      // Skip if still zero after rounding
-      if (estShares <= 0) {
-        console.log('[SKIP ORDER] Estimated shares too small, skipping...');
-        break;
-      }
+    // ✅ enforce market minimum here dynamically
+    const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001; // fallback
+    estShares = Math.max(estShares, marketMinSafe); 
+    estShares = enforceMarketMinShares(estShares, marketMinSafe);
+// Skip if still zero after rounding or tiny balance
+if (estShares <= 0 || remainingUSDC < 0.01) {
+  console.log('[SKIP ORDER] Estimated shares too small or balance too low, skipping...');
+  break;
+}
 
       const filled = await postSingleOrder(
         clobClient,
