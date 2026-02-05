@@ -1,4 +1,4 @@
-import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
+    import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
@@ -261,23 +261,24 @@ const postOrder = async (
     await updateActivity();
   }
 
-// ======== BUY ========
-else if (condition === 'buy') {
-  console.log('Buy Strategy...');
-// ===== DYNAMIC EXPOSURE CALCULATION =====
-// User's portfolio: cash + current position value in this token
-const userPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
-// User's intended exposure percentage for this trade
-const userExposurePct = trade.usdcSize / Math.max(userPortfolio, 1);
-// Your target exposure in USD for this token
-const targetExposureValue = (my_balance + (my_position?.size ?? 0) * trade.price) * userExposurePct;
-// Current exposure in this token (tracking previous fills)
-const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
-// How much more exposure you need
-let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
-// Never exceed available cash
-remainingUSDC = Math.min(remainingUSDC, my_balance);
-    console.log(`[BUY] Target exposure: $${targetExposureValue.toFixed(2)}, current exposure: $${currentExposureValue.toFixed(2)}, remainingUSDC: $${remainingUSDC.toFixed(6)}`);
+/// ===== DYNAMIC EXPOSURE CALCULATION (MIRROR USER EXPOSURE) =====
+// Step 1: Calculate the other user's portfolio and their exposure %
+        const userPortfolio = user_balance + (user_position?.size ?? 0) * trade.price;
+        const userExposurePct = trade.usdcSize / Math.max(userPortfolio, 1);
+// Step 2: Scale to your portfolio
+        const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
+        const targetExposureValue = myPortfolio * userExposurePct;
+// Step 3: Subtract what you've already filled in this token
+        const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
+// Step 4: Calculate remaining USD to buy, never exceeding your cash
+        let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
+    remainingUSDC = Math.min(remainingUSDC, my_balance);
+        console.log(`[BUY] Mirroring user exposure:`);
+        console.log(`  User exposure %: ${(userExposurePct*100).toFixed(2)}%`);
+        console.log(`  Target exposure for you: $${targetExposureValue.toFixed(2)}`);
+        console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
+        console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
+
       let retry = 0;
 
   while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
@@ -313,7 +314,10 @@ remainingUSDC = Math.min(remainingUSDC, my_balance);
     const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001; // fallback
     estShares = Math.max(estShares, marketMinSafe); 
     estShares = enforceMarketMinShares(estShares, marketMinSafe); // rounds DOWN to 4 decimals but always >= min
-console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw.toFixed(2)} (fee multiplier: ${feeMultiplier.toFixed(4)}), remainingUSDC: $${remainingUSDC.toFixed(6)})`);
+
+  console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw.toFixed(2)}`);
+  console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
+  console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
 
     // Skip only if remaining USDC is too low
     if (remainingUSDC < 0.01) {
@@ -338,6 +342,11 @@ console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw
       const totalCost = filled * askPriceRaw * feeMultiplier;
       remainingUSDC -= totalCost;
       retry = 0;
+
+    console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${totalCost.toFixed(6)})`);
+    console.log(`  Remaining USDC after order: $${remainingUSDC.toFixed(6)}`);
+    console.log(`  Total dynamic exposure for token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
+    console.log(`  Exposure value: $${(dynamicExposure[tokenId]*askPriceRaw).toFixed(6)}`);
     }
 
     if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
