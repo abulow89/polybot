@@ -135,7 +135,6 @@ const orderArgs = {
     price,
     takerAmount,
     makerAmountFloat,
-    makerAmountRounded,
     takerAmountInt,
     makerAmountInt,
     orderArgs
