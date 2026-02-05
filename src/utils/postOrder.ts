@@ -245,7 +245,7 @@ const postOrder = async (
 
     const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
       
-    console.log(`[BUY] Mirroring user exposure (scaled by portfolio ratio):`);
+    console.log(`[BUY] Mirroring user exposure (scaled by x10):`);
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(2)}%`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(2)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
