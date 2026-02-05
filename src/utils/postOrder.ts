@@ -88,10 +88,10 @@ const fromBaseUnitsInt = (amountInt: number, decimals: number) => {
 // ======== HELPER: enforce market minimum and rounding ========
 const enforceMarketMinShares = (shares: number, marketMin?: number) => {
   const min = marketMin ?? 0;
-  let adjusted = Math.max(shares, min);
+  const adjusted = Math.max(shares, min); // bump to market minimum first
   if (adjusted > shares) console.log(`[MIN ORDER] Amount bumped from ${shares} → ${adjusted}`);
-  return formatTakerAmount(adjusted);
-};
+  return formatTakerAmount(adjusted); // then round down to 4 decimals
+};;
 // ======== POST SINGLE ORDER (simplified) ===================================================================================
 const postSingleOrder = async (
   clobClient: ClobClient,
@@ -260,7 +260,8 @@ const postOrder = async (
     let retry = 0;
 
     while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-      if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
+      if (retry >= FAST_ATTEMPTS) 
+          await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
 
       let orderBook;
       try {
@@ -281,7 +282,20 @@ const postOrder = async (
       if (isNaN(askSize) || askSize <= 0) break;
       if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
-      let estShares = Math.min(remainingUSDC / (askPriceRaw * feeMultiplier), askSize);
+      // Estimate shares affordable
+      let estShares = Math.min(
+          remainingUSDC / (askPriceRaw * feeMultiplier),
+          askSize
+      );
+
+      // ✅ enforce market minimum here
+      estShares = enforceMarketMinShares(estShares, marketMinSize);
+
+      // Skip if still zero after rounding
+      if (estShares <= 0) {
+        console.log('[SKIP ORDER] Estimated shares too small, skipping...');
+        break;
+      }
 
       const filled = await postSingleOrder(
         clobClient,
@@ -305,7 +319,9 @@ const postOrder = async (
     }
 
     await updateActivity();
-  } else {
+}
+
+   else {
     console.log('Condition not supported');
   }
 };
