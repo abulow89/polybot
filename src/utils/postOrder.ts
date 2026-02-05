@@ -125,8 +125,8 @@ const postSingleOrder = async (
     size: takerAmountFinal.toString(4),
     price: price.toFixed(2),
     feeRateBps,
-    makerAmount: Math.floor(makerAmount * 1e2).toString(), // USDC 2 decimals
-    takerAmount: Math.floor(takerAmountFinal * 1e4).toString(), // shares 4 decimals
+    makerAmount: Math.floor(makerAmount).toFixed(2), // USDC 2 decimals
+    takerAmount: Math.floor(takerAmountFinal).toFixed(4), // shares 4 decimals
   };
 
   const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
