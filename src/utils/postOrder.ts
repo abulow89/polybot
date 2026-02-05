@@ -150,7 +150,7 @@ const postSingleOrder = async (
   const signedOrder = await createOrderWithRetry(clobClient, order_args);
   if (!signedOrder) return 0;
 
-  const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
+  const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.GTC));
   if (!resp.success) {
     console.log('Error posting order:', resp.error ?? resp);
     return 0;
