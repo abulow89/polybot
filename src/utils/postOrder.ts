@@ -280,10 +280,10 @@ const postOrder = async (
       if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
       // Estimate shares affordable
-      let estShares = Math.min(
-        remainingUSDC / (askPriceRaw * feeMultiplier),
-        askSize
-      );
+            let estShares = Math.min(
+              remainingUSDC / askPriceRaw,  // remove feeMultiplier here
+              askSize
+                );
 
       const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
       estShares = Math.max(estShares, marketMinSafe);
