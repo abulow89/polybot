@@ -246,10 +246,7 @@ const postOrder = async (
     console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
     let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
     remainingUSDC = Math.min(remainingUSDC, my_balance);
-
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
-// 🔹 Add log here for clarity
-console.log(`[ORDER ATTEMPT] Trying to BUY ${sharesToBuy} shares of ${tokenId} at $${askPriceRaw.toFixed(2)} each`);
     let retry = 0;
     while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
       if (retry >= FAST_ATTEMPTS) 
