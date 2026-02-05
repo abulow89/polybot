@@ -112,31 +112,21 @@ if (availableBalance !== undefined && makerAmountFloat * effectiveFeeMultiplier 
   console.log(`[SKIP ORDER] Not enough balance: need ${makerAmountFloat * effectiveFeeMultiplier}, have ${availableBalance}`);
   return 0;
 }
-
-// ===== CONVERT TO BASE UNITS =====
-const SHARE_DECIMALS = 6;  // API uses 6 decimals for shares
-const USDC_DECIMALS = 4;   // API uses 4 decimals for USDC (not 6!)
-
-const takerAmountInt = Math.floor(takerAmount * 10 ** SHARE_DECIMALS);
-const makerAmountInt = Math.floor(makerAmountFloat * 10 ** USDC_DECIMALS);
-
 const orderArgs = {
   side,
   tokenID: tokenId,
-  size: takerAmountInt.toString(),
+  size: takerAmount.toString(),
   price: price.toFixed(2),
   feeRateBps,
-  makerAmount: makerAmountInt.toString(),
-  takerAmount: takerAmountInt.toString(),
-  };
+  makerAmount: makerAmountFloat.toString(),
+  takerAmount: takerAmount.toString(),
+};
 
   console.log('===== ORDER DEBUG =====');
   console.log({
     price,
     takerAmount,
     makerAmountFloat,
-    takerAmountInt,
-    makerAmountInt,
     orderArgs
   });
 
