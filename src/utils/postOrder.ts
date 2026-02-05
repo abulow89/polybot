@@ -1,4 +1,4 @@
-import { ClobClient, OrderType, Side } from '@polymarket/clob-client';
+import { ClobClient, OrderType, Side, Market } from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
@@ -91,22 +91,18 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   availableBalance?: number,
-  market?: { minimumOrderSize?: number },
+  marketMinSize: number,
   feeMultiplier?: number
 ) => {
-  const marketMinSize = marketInfo?.minimumOrderSize ?? 1;
-  const effectiveFeeMultiplier = feeMultiplier ?? 1;
-
+  
+    const effectiveFeeMultiplier = feeMultiplier ?? 1;
   // ================= PRICE + SIZE NORMALIZATION (MATCHES SCRIPT1) =================
   const price = formatPriceForOrder(priceRaw);
-  
-  // Enforce minimum shares first, then format
+    // Enforce minimum shares first, then format
   const takerAmountSafe = Math.max(amountRaw, marketMinSize);
   const takerAmount = formatTakerAmount(takerAmountSafe); // Round to 4 decimals
-
  // ================= EXCHANGE COST MATH =================
 const makerAmountFloat = takerAmount * price;
-
 // ===== BALANCE CHECK =====
 if (availableBalance !== undefined && makerAmountFloat * effectiveFeeMultiplier > availableBalance) {
   console.log(`[SKIP ORDER] Not enough balance: need ${makerAmountFloat * effectiveFeeMultiplier}, have ${availableBalance}`);
@@ -170,7 +166,7 @@ const postOrder = async (
 
   const feeRateBps = market?.taker_base_fee ?? 0;
   const feeMultiplier = 1 + feeRateBps / 10000;
-  const marketMinSize = market?.minOrderSize ?? 0.001;
+  const marketMinSize = market?.minimum_order_size ?? 0;
 
   console.log('Market info:', market);
   console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
