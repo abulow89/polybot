@@ -93,6 +93,54 @@ const updateDynamicExposure = (tokenId: string, filled: number) => {
   dynamicExposure[tokenId] += filled;
   console.log(`[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
 };
+// ======== POST SINGLE ORDER ====================================================
+const postSingleOrder = async (
+  clobClient: ClobClient,
+  side: Side,
+  tokenId: string,
+  takerAmount: number,
+  priceRaw: number,
+  feeRateBps: number,
+  availableBalance?: number,
+  market?: { minOrderSize?: number },
+  feeMultiplier?: number
+) => {
+  const marketMinSize = market?.minOrderSize ?? 0.001;
+  const effectiveFeeMultiplier = feeMultiplier ?? 1;
+
+  const price = formatPriceForOrder(priceRaw);
+  const takerAmountSafe = Math.max(takerAmount, 0.0001); // enforce min
+  const takerAmountFinal = enforceMarketMinShares(takerAmountSafe, marketMinSize);
+
+  const makerAmount = takerAmountFinal * price;
+
+  if (availableBalance !== undefined && makerAmount * effectiveFeeMultiplier > availableBalance) {
+    console.log(`[SKIP ORDER] Not enough balance: need ${makerAmount * effectiveFeeMultiplier}, have ${availableBalance}`);
+    return 0;
+  }
+
+  const orderArgs = {
+    side,
+    tokenID: tokenId,
+    size: takerAmountFinal.toString(),
+    price: price.toFixed(2),
+    feeRateBps,
+    makerAmount: Math.floor(makerAmount * 1e6).toString(), // USDC 6 decimals
+    takerAmount: Math.floor(takerAmountFinal * 1e4).toString(), // shares 4 decimals
+  };
+
+  const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
+  if (!signedOrder) return 0;
+
+  const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
+  if (!resp.success) {
+    console.log('Error posting order:', resp.error ?? resp);
+    return 0;
+  }
+
+  updateDynamicExposure(tokenId, takerAmountFinal);
+  return takerAmountFinal;
+};
 // ======== MAIN POST ORDER FUNCTION ========
 const postOrder = async (
   clobClient: ClobClient,
