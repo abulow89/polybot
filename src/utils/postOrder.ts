@@ -159,7 +159,7 @@ const postOrder = async (
         orderBook.bids[0]
       );
 
-      const filled = await postOrder(
+      const filled = await postSingleOrder(
         clobClient,
         Side.SELL,
         tokenId,
@@ -251,7 +251,7 @@ const postOrder = async (
         break;
       }
 
-      const filled = await postOrder(
+      const filled = await postSingleOrder(
         clobClient,
         Side.BUY,
         tokenId,
