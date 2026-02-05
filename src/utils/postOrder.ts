@@ -291,9 +291,9 @@ const postOrder = async (
         console.log(`[SKIP ORDER] Not enough USDC to cover minimum order size. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
         break; // skip this order
       }
+        console.log(`[MIN ORDER ENFORCED] Bumping order from ${estShares.toFixed(6)} → ${marketMinSafe} shares to meet minimum order size`);
       estShares = marketMinSafe;
     }
-
       estShares = enforceMarketMinShares(estShares, marketMinSafe); // existing rounding
 
       console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw.toFixed(2)}`);
