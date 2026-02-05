@@ -119,15 +119,30 @@ const postSingleOrder = async (
     return 0;
   }
 
-  const orderArgs = {
-    side,
-    tokenID: tokenId,
-    size: takerAmountFinal.toFixed(4),
-    price: price.toFixed(2),
-    feeRateBps,
-   makerAmount: Math.floor(makerAmount * 1e6).toString(),
-  takerAmount: Math.floor(takerAmountFinal * 1e4).toString(),
-  };
+  // ===== EXCHANGE COST MATH (MATCH SCRIPT 1) =====
+const takerAmountRounded = formatTakerAmount(takerAmountFinal); // 4 decimals
+
+const makerAmountFloat = takerAmountRounded * price;
+
+// Exchange rounds UP to cents
+const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
+
+// ===== BASE UNIT CONVERSION =====
+const SHARE_DECIMALS = 4;
+const USDC_DECIMALS = 6;
+
+const takerAmountInt = Math.ceil(takerAmountRounded * 10 ** SHARE_DECIMALS);
+const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
+
+const orderArgs = {
+  side,
+  tokenID: tokenId,
+  size: takerAmountInt.toString(),        // ✅ integer base units
+  price: price.toFixed(2),
+  feeRateBps,
+  makerAmount: makerAmountInt.toString(), // ✅ integer base units
+  takerAmount: takerAmountInt.toString(), // ✅ integer base units
+};
 
   const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
   if (!signedOrder) return 0;
