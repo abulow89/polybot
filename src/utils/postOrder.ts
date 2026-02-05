@@ -302,14 +302,7 @@ else if (condition === 'buy') {
 
     // Skip only if remaining USDC is too low
     if (remainingUSDC < 0.01) {
-      console.log(`[SKIP ORDER] Remaining USDC too low (${remainingUSDC.toFixed(6)}), 
-      estShares: estShares.toFixed(6),
-      remainingUSDC: remainingUSDC.toFixed(6),
-      price: askPriceRaw.toFixed(6),
-      feeMultiplier: feeMultiplier.toFixed(4),
-      marketMinSafe: marketMinSafe.toFixed(6),
-      totalCost: totalCost.toFixed(6),
-      skipping...`);
+      console.log(`[SKIP ORDER] Remaining USDC too low (${remainingUSDC.toFixed(6)}), skipping...`);
       break;
     }
      
