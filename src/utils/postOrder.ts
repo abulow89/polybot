@@ -94,7 +94,7 @@ const postSingleOrder = async (
   market?: { minOrderSize?: number },
   feeMultiplier?: number
 ) => {
-  const marketMinSize = market?.minOrderSize ?? 1;
+  const marketMinSize = market?.minimumOrderSize ?? 1;
   const effectiveFeeMultiplier = feeMultiplier ?? 1;
 
   // ================= PRICE + SIZE NORMALIZATION (MATCHES SCRIPT1) =================
