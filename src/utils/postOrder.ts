@@ -104,32 +104,30 @@ const postSingleOrder = async (
   const takerAmountSafe = Math.max(amountRaw, marketMinSize);
   const takerAmount = formatTakerAmount(takerAmountSafe); // Round to 4 decimals
 
-  // ================= EXCHANGE COST MATH (MATCHES SCRIPT1) =================
-  const makerAmountFloat = takerAmount * price;
-  // Exchange rounds UP to cents
-  const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
+ // ================= EXCHANGE COST MATH =================
+const makerAmountFloat = takerAmount * price;
 
-  // ===== BALANCE CHECK =====
-  if (availableBalance !== undefined && makerAmountRounded > availableBalance) {
-    console.log(`[SKIP ORDER] Not enough balance: need ${makerAmountRounded}, have ${availableBalance}`);
-    return 0;
-  }
+// ===== BALANCE CHECK =====
+if (availableBalance !== undefined && makerAmountFloat * effectiveFeeMultiplier > availableBalance) {
+  console.log(`[SKIP ORDER] Not enough balance: need ${makerAmountFloat * effectiveFeeMultiplier}, have ${availableBalance}`);
+  return 0;
+}
 
-  // ===== CONVERT TO BASE UNITS (MATCHES SCRIPT1) =====
-  const SHARE_DECIMALS = 4;
-  const USDC_DECIMALS = 6;
+// ===== CONVERT TO BASE UNITS =====
+const SHARE_DECIMALS = 4;
+const USDC_DECIMALS = 6;
 
-  const takerAmountInt = Math.ceil(takerAmount * 10 ** SHARE_DECIMALS);
-  const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
+const takerAmountInt = Math.floor(takerAmount * 10 ** SHARE_DECIMALS);
+const makerAmountInt = Math.floor(makerAmountFloat * 10 ** USDC_DECIMALS);
 
-  const orderArgs = {
-    side,
-    tokenID: tokenId,
-    size: takerAmountInt.toString(),        // integer base units as string
-    price: price.toFixed(2),
-    feeRateBps,
-    makerAmount: makerAmountInt.toString(), // integer base units as string
-    takerAmount: takerAmountInt.toString(), // integer base units as string
+const orderArgs = {
+  side,
+  tokenID: tokenId,
+  size: takerAmountInt.toString(),
+  price: price.toFixed(2),
+  feeRateBps,
+  makerAmount: makerAmountInt.toString(),
+  takerAmount: takerAmountInt.toString(),
   };
 
   console.log('===== ORDER DEBUG =====');
