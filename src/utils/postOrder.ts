@@ -94,7 +94,7 @@ const updateDynamicExposure = (tokenId: string, filled: number) => {
   console.log(`[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
 };
 // ======== POST SINGLE ORDER (simplified) ===================================================================================
-const postOrder = async (
+const postSingleOrder = async (
   clobClient: ClobClient,
   condition: string,
   my_position: UserPositionInterface | undefined,
