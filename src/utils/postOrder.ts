@@ -310,7 +310,7 @@ const orderArgsLog = {
 
 console.log('  [ORDER ARGS]', orderArgsLog);
 
-      if (remainingUSDC < 0.01) {
+      if (remainingUSDC < 0.0001) {
         console.log(`[SKIP ORDER] Remaining USDC too low (${remainingUSDC.toFixed(6)}), skipping...`);
         break;
       }
