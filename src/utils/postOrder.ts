@@ -109,13 +109,14 @@ const postSingleOrder = async (
 const price = formatPriceForOrder(priceRaw);
 const takerAmount = enforceMarketMinShares(amountRaw, market?.minOrderSize);
 
-  // ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
-  if (availableBalance !== undefined && makerAmountRounded > availableBalance) {
-    console.log(
-      `[SKIP ORDER] Insufficient balance: need ${makerAmountRounded}, have ${availableBalance}`
-    );
-    return 0;
-  }
+// ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
+const totalCost = takerAmount * price * feeMultiplier; // exact cost
+if (availableBalance !== undefined && totalCost > availableBalance) {
+  console.log(
+    `[SKIP ORDER] Insufficient balance: need ${totalCost.toFixed(6)}, have ${availableBalance}`
+  );
+  return 0;
+}
 
   // ===== BASE UNITS =====
 const USDC_DECIMALS = 6;
@@ -136,9 +137,9 @@ const makerAmountInt = Math.max(1, Math.floor(takerAmount * price * 10 ** USDC_D
   console.log('===== FINAL ORDER =====', {
     price,
     takerAmount,
-    makerAmountRounded,
     takerAmountInt,
     makerAmountInt,
+    totalCost,
   });
 
   const signedOrder = await createOrderWithRetry(clobClient, order_args);
@@ -304,8 +305,8 @@ const postOrder = async (
 
       if (!filled) retry++;
       else {
-        const makerAmountRounded = Math.ceil(filled * askPriceRaw * 100) / 100;
-        remainingUSDC -= makerAmountRounded * feeMultiplier;
+        const totalCost = filled * askPriceRaw * feeMultiplier;
+                remainingUSDC -= totalCost;
         retry = 0;
       }
 
