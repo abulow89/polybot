@@ -223,13 +223,13 @@ const postOrder = async (
   try {
     market = await safeCall(() => clobClient.getMarket(marketId));
   } catch (err) {
-    console.warn(`[CLOB] Could not fetch market fee for ${marketId}, using 0`, err);
-    market = { taker_base_fee: 0, minOrderSize: 0 };
+    console.warn(`[CLOB] Could not fetch market fee or min size for ${marketId}, using 0`, err);
+    market = { taker_base_fee: 0, min_order_size: 0 };
   }
 
   const feeRateBps = market?.taker_base_fee ?? 0;
   const feeMultiplier = 1 + feeRateBps / 10000;
-  const marketMinSize = market?.minimum_order_size ?? 1;
+  const marketMinSize = market?.min_order_size ?? 1;
 
   console.log('Market info:', market);
   console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
@@ -337,7 +337,7 @@ const postOrder = async (
       if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
       // --- Estimate shares affordable (MATCHES SCRIPT1) ---
-      const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
+      const marketMinSafe = marketMinSize > 0 ? marketMinSize : 1;
       
       // Calculate max shares you can afford with remaining USDC
       let estShares = Math.min(
