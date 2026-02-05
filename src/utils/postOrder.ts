@@ -296,7 +296,8 @@ const postOrder = async (
       
       // Round exactly like order will (MATCHES SCRIPT1)
       const sharesToBuy = formatTakerAmount(Math.max(estShares, marketMinSafe));
-
+// 🔹 Add log here for clarity
+console.log(`[ORDER ATTEMPT] Trying to BUY ${sharesToBuy} shares of ${tokenId} at $${askPriceRaw.toFixed(2)} each`);
       console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
       console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
       console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
