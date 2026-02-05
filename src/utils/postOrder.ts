@@ -295,10 +295,6 @@ else if (condition === 'buy') {
       askSize
     );
 
-    // ✅ enforce market minimum
-    const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
-    estShares = Math.max(estShares, marketMinSafe);
-
       // Round up to market minimum / tick size
     const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001; // fallback
     estShares = Math.max(estShares, marketMinSafe); 
