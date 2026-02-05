@@ -9,6 +9,9 @@ const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100
 // Taker amount rounding — round down to 4 decimals (max accuracy for API)
 const formatTakerAmount = (a: number) => Math.floor(a * 10000) / 10000; // 4 decimals max
 
+const MIN_SHARES = 0.01;
+const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
+
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
@@ -67,13 +70,7 @@ const createOrderWithRetry = async (
     }
   }
 };
-// ======== HELPER: enforce market minimum and rounding ========
-const enforceMarketMinShares = (shares: number, marketMin?: number) => {
-  const min = marketMin ?? 0.001;
-  const adjusted = Math.max(shares, min); // bump to market minimum first
-  if (adjusted > shares) console.log(`[MIN ORDER] Amount bumped from ${shares} → ${adjusted}`);
-  return formatTakerAmount(adjusted); // then round down to 4 decimals
-};;
+
 // ======== DYNAMIC EXPOSURE TRACKING ========
 // Tracks filled shares per token in this session
 const dynamicExposure: Record<string, number> = {};
@@ -84,12 +81,13 @@ const updateDynamicExposure = (tokenId: string, filled: number) => {
   dynamicExposure[tokenId] += filled;
   console.log(`[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
 };
+
 // ======== POST SINGLE ORDER ====================================================
 const postSingleOrder = async (
   clobClient: ClobClient,
   side: Side,
   tokenId: string,
-  takerAmount: number,
+  amountRaw: number,
   priceRaw: number,
   feeRateBps: number,
   availableBalance?: number,
@@ -99,39 +97,51 @@ const postSingleOrder = async (
   const marketMinSize = market?.minOrderSize ?? 0.001;
   const effectiveFeeMultiplier = feeMultiplier ?? 1;
 
+  // ================= PRICE + SIZE NORMALIZATION (MATCHES SCRIPT1) =================
   const price = formatPriceForOrder(priceRaw);
-  const takerAmountSafe = Math.max(takerAmount, 0.0001); // enforce min
-  const takerAmountFinal = enforceMarketMinShares(takerAmountSafe, marketMinSize);
+  
+  // Enforce minimum shares first, then format
+  const takerAmountSafe = Math.max(amountRaw, marketMinSize);
+  const takerAmount = formatTakerAmount(takerAmountSafe); // Round to 4 decimals
 
-  const makerAmount = takerAmountFinal * price;
+  // ================= EXCHANGE COST MATH (MATCHES SCRIPT1) =================
+  const makerAmountFloat = takerAmount * price;
+  // Exchange rounds UP to cents
+  const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
 
-  if (availableBalance !== undefined && makerAmount * effectiveFeeMultiplier > availableBalance) {
-    console.log(`[SKIP ORDER] Not enough balance: need ${makerAmount * effectiveFeeMultiplier}, have ${availableBalance}`);
+  // ===== BALANCE CHECK =====
+  if (availableBalance !== undefined && makerAmountRounded > availableBalance) {
+    console.log(`[SKIP ORDER] Not enough balance: need ${makerAmountRounded}, have ${availableBalance}`);
     return 0;
   }
 
-  // ===== EXCHANGE COST MATH (MATCH SCRIPT 1) =====
-const takerAmountRounded = formatTakerAmount(takerAmountFinal); // 4 decimals
+  // ===== CONVERT TO BASE UNITS (MATCHES SCRIPT1) =====
+  const SHARE_DECIMALS = 4;
+  const USDC_DECIMALS = 6;
 
-const makerAmountFloat = takerAmountRounded * price;
+  const takerAmountInt = Math.ceil(takerAmount * 10 ** SHARE_DECIMALS);
+  const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
 
-// ===== BASE UNIT CONVERSION (FIXED) =====
-const SHARE_DECIMALS = 4;
-const USDC_DECIMALS = 6;
+  const orderArgs = {
+    side,
+    tokenID: tokenId,
+    size: takerAmountInt.toString(),        // integer base units as string
+    price: price.toFixed(2),
+    feeRateBps,
+    makerAmount: makerAmountInt.toString(), // integer base units as string
+    takerAmount: takerAmountInt.toString(), // integer base units as string
+  };
 
-// Don't round to cents first - work with full precision
-const takerAmountInt = Math.floor(takerAmountRounded * 10 ** SHARE_DECIMALS);
-const makerAmountInt = Math.floor(makerAmountFloat * 10 ** USDC_DECIMALS);
-
-const orderArgs = {
-  side,
-  tokenID: tokenId,
-  size: takerAmountInt.toString(),
-  price: price.toFixed(2),
-  feeRateBps,
-  makerAmount: makerAmountInt.toString(), 
-  takerAmount: takerAmountInt.toString(),
-};
+  console.log('===== ORDER DEBUG =====');
+  console.log({
+    price,
+    takerAmount,
+    makerAmountFloat,
+    makerAmountRounded,
+    takerAmountInt,
+    makerAmountInt,
+    orderArgs
+  });
 
   const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
   if (!signedOrder) return 0;
@@ -142,9 +152,10 @@ const orderArgs = {
     return 0;
   }
 
-  updateDynamicExposure(tokenId, takerAmountFinal);
-  return takerAmountFinal;
+  updateDynamicExposure(tokenId, takerAmount);
+  return takerAmount;
 };
+
 // ======== MAIN POST ORDER FUNCTION ========
 const postOrder = async (
   clobClient: ClobClient,
@@ -235,7 +246,7 @@ const postOrder = async (
     await updateActivity();
   }
 
-  // ======== BUY =============================================================================================================
+  // ======== BUY ========
   else if (condition === 'buy') {
     console.log('Buy Strategy...');
 
@@ -255,7 +266,6 @@ const postOrder = async (
     console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
     let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
     remainingUSDC = Math.min(remainingUSDC, my_balance);
-
 
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
 
@@ -283,43 +293,33 @@ const postOrder = async (
       if (isNaN(askSize) || askSize <= 0) break;
       if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
- // --- NEW: enforce minimum dynamic order size ---
-    const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
-    // Calculate max shares you can afford with remaining USDC
-    let estShares = Math.min(remainingUSDC / askPriceRaw, askSize);
-    // Enforce the market minimum dynamically
-    if (estShares < marketMinSafe) {
-      const minCost = marketMinSafe * askPriceRaw * feeMultiplier;
+      // --- Estimate shares affordable (MATCHES SCRIPT1) ---
+      const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
       
+      // Calculate max shares you can afford with remaining USDC
+      let estShares = Math.min(
+        remainingUSDC / (askPriceRaw * feeMultiplier),
+        askSize
+      );
+      
+      // Enforce the market minimum dynamically
+      if (estShares < marketMinSafe) {
+        const minCost = marketMinSafe * askPriceRaw * feeMultiplier;
+        
         if (remainingUSDC < minCost) {
-        console.log(`[SKIP ORDER] Not enough USDC to cover minimum order size. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
-        break; // skip this order
-      }
+          console.log(`[SKIP ORDER] Not enough USDC to cover minimum order size. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
+          break;
+        }
         console.log(`[MIN ORDER ENFORCED] Bumping order from ${estShares.toFixed(6)} → ${marketMinSafe} shares to meet minimum order size`);
-      estShares = marketMinSafe;
-    }
-      estShares = enforceMarketMinShares(estShares, marketMinSafe); // existing rounding
+        estShares = marketMinSafe;
+      }
+      
+      // Round exactly like order will (MATCHES SCRIPT1)
+      const sharesToBuy = formatTakerAmount(Math.max(estShares, marketMinSafe));
 
-      console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw.toFixed(2)}`);
+      console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
       console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
       console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
-// Build order args for logging (mirrors what postSingleOrder will do)
-const takerAmountFinal = enforceMarketMinShares(Math.max(estShares, marketMinSafe), marketMinSafe);
-const price = formatPriceForOrder(askPriceRaw);
-const makerAmount = takerAmountFinal * price;
-
-const orderArgsLog = {
-  side: Side.BUY,
-  tokenID: tokenId,
-  size: takerAmountFinal.toString(),
-  price: price.toFixed(2),
-  feeRateBps,
-  makerAmount: Math.floor(makerAmount * 1e6).toString(),
-  takerAmount: Math.floor(takerAmountFinal * 1e4).toString(),
-  feeMultiplier,
-};
-
-console.log('  [ORDER ARGS]', orderArgsLog);
 
       if (remainingUSDC < 0.0001) {
         console.log(`[SKIP ORDER] Remaining USDC too low (${remainingUSDC.toFixed(6)}), skipping...`);
@@ -330,7 +330,7 @@ console.log('  [ORDER ARGS]', orderArgsLog);
         clobClient,
         Side.BUY,
         tokenId,
-        estShares,
+        sharesToBuy,
         askPriceRaw,
         feeRateBps,
         my_balance,
@@ -340,11 +340,12 @@ console.log('  [ORDER ARGS]', orderArgsLog);
 
       if (!filled) retry++;
       else {
-        const totalCost = filled * askPriceRaw * feeMultiplier;
-        remainingUSDC -= totalCost;
+        // Must match postSingleOrder math EXACTLY (MATCHES SCRIPT1)
+        const makerAmountRounded = Math.ceil((filled * askPriceRaw) * 100) / 100;
+        remainingUSDC -= makerAmountRounded * feeMultiplier;
         retry = 0;
 
-        console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${totalCost.toFixed(6)})`);
+        console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * feeMultiplier).toFixed(6)})`);
         console.log(`  Remaining USDC after order: $${remainingUSDC.toFixed(6)}`);
         console.log(`  Total dynamic exposure for token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
         console.log(`  Exposure value: $${(dynamicExposure[tokenId]*askPriceRaw).toFixed(6)}`);
