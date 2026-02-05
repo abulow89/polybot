@@ -9,9 +9,6 @@ const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100
 // Taker amount rounding — round down to 4 decimals (max accuracy for API)
 const formatTakerAmount = (a: number) => Math.floor(a * 10000) / 10000; // 4 decimals max
 
-const MIN_SHARES = 0.01;
-const enforceMinShares = (shares: number) => Math.max(MIN_SHARES, shares);
-
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
@@ -91,7 +88,7 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   availableBalance?: number,
-  marketMinSize?: number,
+  marketMinSize: number,
   feeMultiplier?: number
 ) => {
   
