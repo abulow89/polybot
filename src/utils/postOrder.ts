@@ -190,7 +190,7 @@ const executeSmartOrder = async (
     bestPrice,
     feeRateBps,
     marketMinSize,
-    OrderType.IOC,
+    OrderType.FAK,
     availableBalance,
     feeMultiplier
   );
