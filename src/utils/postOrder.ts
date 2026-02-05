@@ -98,50 +98,46 @@ const postSingleOrder = async (
   feeRateBps: number,
   availableBalance?: number
 ) => {
-// ================= PRICE + SIZE NORMALIZATION =================
+  // ================= PRICE + SIZE NORMALIZATION =================
   const price = formatPriceForOrder(priceRaw);
-// Round shares to exchange precision
+
+  // Round shares to exchange precision
   const takerAmount = enforceMinShares(formatTakerAmount(amountRaw));
-// ================= EXCHANGE COST MATH =================
+
+  // ================= EXCHANGE COST MATH =================
   const makerAmountFloat = takerAmount * price;
- // Exchange rounds UP to cents
+  // Exchange rounds UP to cents
   const makerAmountRounded = Math.ceil(makerAmountFloat * 100) / 100;
-// ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
+
+  // ===== BALANCE CHECK (BUY ONLY EFFECTIVE) =====
   if (availableBalance !== undefined && makerAmountRounded > availableBalance) {
     console.log(
       `[SKIP ORDER] Insufficient balance: need ${makerAmountRounded}, have ${availableBalance}`
     );
     return 0;
   }
-    // ====== ALLOWANCE CHECK======
-const ensureAllowance = async (clobClient: ClobClient, owner: string, requiredAmountInt: number) => {
-    const currentAllowance = await clobClient.getAllowance(owner); // returns integer in USDC base units
-    if (currentAllowance >= requiredAmountInt) return;
 
-    console.log(`[ALLOWANCE] Insufficient allowance (${currentAllowance} < ${requiredAmountInt}), approving...`);
-    await clobClient.approve(requiredAmountInt); // approve enough USDC
-    console.log('[ALLOWANCE] Approval complete');
-};
-   // =====  CONVERT TO INTEGERS FOR SIGNING =====
-const USDC_DECIMALS = 6;
-const SHARE_DECIMALS = 4; // taker shares precision
-const takerAmountInt = Math.ceil(takerAmount * 10 ** SHARE_DECIMALS);
-const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
- // True order cost
+  // ===== CONVERT TO INTEGERS FOR SIGNING =====
+  const USDC_DECIMALS = 6;
+  const SHARE_DECIMALS = 4; // taker shares precision
+  const takerAmountInt = Math.ceil(takerAmount * 10 ** SHARE_DECIMALS);
+  const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
+
+  // True order cost (for logging/debugging)
   const notional = makerAmountRounded;
- 
-  
- const order_args = {
+
+  const order_args = {
     side,
     tokenID: tokenId,
     size: takerAmountInt.toString(), // send integer as string
-    price: price.toFixed(2), // keep price string at 2 decimals
+    price: price.toFixed(2),         // keep price string at 2 decimals
     feeRateBps,
     makerAmount: makerAmountInt.toString(), // send integer as string
     takerAmount: takerAmountInt.toString(), // send integer as string
   };
-// ===== BUILD ORDER =====
-   console.log('===== FINAL ORDER =====');
+
+  // ===== BUILD ORDER =====
+  console.log('===== FINAL ORDER =====');
   console.log({
     price,
     takerAmount,
@@ -149,13 +145,14 @@ const makerAmountInt = Math.ceil(makerAmountRounded * 10 ** USDC_DECIMALS);
     takerAmountInt,
     makerAmountInt,
   });
-// =====  ENSURE ALLOWANCE =====
-await ensureAllowance(clobClient, USER_ADDRESS, makerAmountInt);
-// =====  SIGN =====
+
+  // ===== SIGN =====
   const signedOrder = await createOrderWithRetry(clobClient, order_args);
   if (!signedOrder) return 0;
-  // =====  POST =====
+
+  // ===== POST =====
   const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FOK));
+
   if (!resp.success) {
     console.log('Error posting order:', resp.error ?? resp);
     return 0;
@@ -166,6 +163,7 @@ await ensureAllowance(clobClient, USER_ADDRESS, makerAmountInt);
 
   return takerAmount; // return shares filled
 };
+
 
 // ======== MAIN POST ORDER FUNCTION ========
 const postOrder = async (
