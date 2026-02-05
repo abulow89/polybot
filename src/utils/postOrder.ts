@@ -231,7 +231,7 @@ const postOrder = async (
     await updateActivity();
   }
 
-  // ======== BUY ========
+  // ======== BUY =============================================================================================================
   else if (condition === 'buy') {
     console.log('Buy Strategy...');
 
@@ -279,15 +279,22 @@ const postOrder = async (
       if (isNaN(askSize) || askSize <= 0) break;
       if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
-      // Estimate shares affordable
-            let estShares = Math.min(
-              remainingUSDC / askPriceRaw,  // remove feeMultiplier here
-              askSize
-                );
+ // --- NEW: enforce minimum dynamic order size ---
+    const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
+    // Calculate max shares you can afford with remaining USDC
+    let estShares = Math.min(remainingUSDC / askPriceRaw, askSize);
+    // Enforce the market minimum dynamically
+    if (estShares < marketMinSafe) {
+      const minCost = marketMinSafe * askPriceRaw * feeMultiplier;
+      
+        if (remainingUSDC < minCost) {
+        console.log(`[SKIP ORDER] Not enough USDC to cover minimum order size. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
+        break; // skip this order
+      }
+      estShares = marketMinSafe;
+    }
 
-      const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001;
-      estShares = Math.max(estShares, marketMinSafe);
-      estShares = enforceMarketMinShares(estShares, marketMinSafe);
+      estShares = enforceMarketMinShares(estShares, marketMinSafe); // existing rounding
 
       console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw.toFixed(2)}`);
       console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
