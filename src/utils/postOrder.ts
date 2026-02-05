@@ -13,6 +13,7 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 const FAST_ATTEMPTS = 2;
+
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 const ORDERBOOK_DELAY = 350;
@@ -41,16 +42,6 @@ const safeCall = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
         }
     }
     throw new Error('Unreachable safeCall state');
-};
-
-// ======== EXPOSURE TRACKING ========
-// Tracks net shares owned per token (local to this module)
-const exposure: Record<string, number> = {};
-
-const updateExposure = (tokenId: string, side: Side, filled: number) => {
-    if (!exposure[tokenId]) exposure[tokenId] = 0;
-    exposure[tokenId] += side === Side.BUY ? filled : -filled;
-    console.log(`[Exposure] Token ${tokenId}: ${exposure[tokenId]} shares`);
 };
 
 // 🔥 ADDED — resilient order creation wrapper
@@ -92,6 +83,16 @@ const enforceMarketMinShares = (shares: number, marketMin?: number) => {
   if (adjusted > shares) console.log(`[MIN ORDER] Amount bumped from ${shares} → ${adjusted}`);
   return formatTakerAmount(adjusted); // then round down to 4 decimals
 };;
+// ======== DYNAMIC EXPOSURE TRACKING ========
+// Tracks filled shares per token in this session
+const dynamicExposure: Record<string, number> = {};
+
+// Call after a successful fill to update exposure
+const updateDynamicExposure = (tokenId: string, filled: number) => {
+  if (!dynamicExposure[tokenId]) dynamicExposure[tokenId] = 0;
+  dynamicExposure[tokenId] += filled;
+  console.log(`[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
+};
 // ======== POST SINGLE ORDER (simplified) ===================================================================================
 const postSingleOrder = async (
   clobClient: ClobClient,
@@ -164,7 +165,8 @@ const postSingleOrder = async (
   }
 
   console.log('Successfully posted order');
-  updateExposure(tokenId, side, takerAmount);
+ updateDynamicExposure(tokenId, takerAmount);
+console.log(`[POST ORDER] Filled ${takerAmount} shares for token ${tokenId}. Total exposure now: ${dynamicExposure[tokenId]} shares`);
 
   return takerAmount;
 };
@@ -262,9 +264,21 @@ const postOrder = async (
 // ======== BUY ========
 else if (condition === 'buy') {
   console.log('Buy Strategy...');
-  const ratio = Math.min(1, my_balance / Math.max(user_balance, 1));
-  let remainingUSDC = Math.min(trade.usdcSize * ratio, my_balance);
-  let retry = 0;
+// ===== DYNAMIC EXPOSURE CALCULATION =====
+// User's portfolio: cash + current position value in this token
+const userPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
+// User's intended exposure percentage for this trade
+const userExposurePct = trade.usdcSize / Math.max(userPortfolio, 1);
+// Your target exposure in USD for this token
+const targetExposureValue = (my_balance + (my_position?.size ?? 0) * trade.price) * userExposurePct;
+// Current exposure in this token (tracking previous fills)
+const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
+// How much more exposure you need
+let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
+// Never exceed available cash
+remainingUSDC = Math.min(remainingUSDC, my_balance);
+    console.log(`[BUY] Target exposure: $${targetExposureValue.toFixed(2)}, current exposure: $${currentExposureValue.toFixed(2)}, remainingUSDC: $${remainingUSDC.toFixed(6)}`);
+      let retry = 0;
 
   while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
     if (retry >= FAST_ATTEMPTS) 
@@ -299,6 +313,7 @@ else if (condition === 'buy') {
     const marketMinSafe = marketMinSize > 0 ? marketMinSize : 0.001; // fallback
     estShares = Math.max(estShares, marketMinSafe); 
     estShares = enforceMarketMinShares(estShares, marketMinSafe); // rounds DOWN to 4 decimals but always >= min
+console.log(`[BUY] Attempting to buy up to ${estShares} shares at $${askPriceRaw.toFixed(2)} (fee multiplier: ${feeMultiplier.toFixed(4)}), remainingUSDC: $${remainingUSDC.toFixed(6)})`);
 
     // Skip only if remaining USDC is too low
     if (remainingUSDC < 0.01) {
