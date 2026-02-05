@@ -284,7 +284,7 @@ const postOrder = async (
   while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
     if (retry >= FAST_ATTEMPTS) 
       await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
-
+  }
     let orderBook;
     try {
       orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
@@ -354,7 +354,6 @@ const postOrder = async (
 
   await updateActivity();
 }
-
    else {
     console.log('Condition not supported');
   }
