@@ -78,7 +78,7 @@ const fromBaseUnitsInt = (amountInt: number, decimals: number) => {
 };
 // ======== HELPER: enforce market minimum and rounding ========
 const enforceMarketMinShares = (shares: number, marketMin?: number) => {
-  const min = marketMin ?? 0;
+  const min = marketMin ?? 0.001;
   const adjusted = Math.max(shares, min); // bump to market minimum first
   if (adjusted > shares) console.log(`[MIN ORDER] Amount bumped from ${shares} → ${adjusted}`);
   return formatTakerAmount(adjusted); // then round down to 4 decimals
