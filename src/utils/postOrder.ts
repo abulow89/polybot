@@ -273,8 +273,13 @@ let remaining = my_position.size;
       
   if (condition === 'sell' && user_position) {
   const totalSize = (user_position.size ?? 0) + (trade.size ?? 0);
+      if (!trade.size || trade.size <= 0) {
+          console.warn('[SKIP SELL] Invalid trade.size');
+  await updateActivity();
+      return;
+        }
   const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
-  remaining *= ratio;
+          remaining *= ratio;
         }
 
     let retry = 0;
@@ -293,10 +298,17 @@ let remaining = my_position.size;
               console.warn(`[SKIP ORDER] Empty bid side for token ${tokenId}`);
                   break;
         }
-
-      const maxPriceBid = orderBook.bids.reduce(
-        (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
-        orderBook.bids[0]
+    const validBids = orderBook.bids.filter(b =>
+          !isNaN(parseFloat(b.price)) && !isNaN(parseFloat(b.size))
+        );
+    
+    if (validBids.length === 0) {
+            console.warn('[SKIP ORDER] No valid bids');
+          break;
+}
+        const maxPriceBid = validBids.reduce(
+         (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
+          orderBook.bids[0]
       );
 
       const filled = await executeSmartOrder(
@@ -328,7 +340,12 @@ let remaining = my_position.size;
     console.log('Buy Strategy...');
 
     const userPortfolio = user_balance + (user_position?.size ?? 0) * trade.price;
-    const userExposurePct = trade.usdcSize / Math.max(userPortfolio, 1);
+    const tradeUSDC = trade.usdcSize ?? 0;
+        if (tradeUSDC <= 0) {
+          console.warn('[SKIP ORDER] Trade missing or invalid usdcSize');
+          return;
+            }
+    const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
 
     const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
     const targetExposureValue = userExposurePct * myPortfolio;
@@ -347,25 +364,42 @@ let remaining = my_position.size;
       if (retry >= FAST_ATTEMPTS) 
         await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
 
-     let orderBook;
-        try {
-          orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-            } catch (err: any) {
-          if (err.response?.status === 404) break;
-              throw err;
-        }
+let orderBook;
+try {
+  orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+} catch (err: any) {
+  if (err.response?.status === 404) break;
+  throw err;
+}
 
-        if (!orderBook || !Array.isArray(orderBook.asks) || orderBook.asks.length === 0) {
-          console.warn(`[SKIP ORDER] Empty ask side for token ${tokenId}`);
-          break;
-            }
+// Validate ASK side (because this is BUY logic)
+if (
+  !orderBook ||
+  !Array.isArray(orderBook.asks) ||
+  orderBook.asks.length === 0
+) {
+  console.warn(`[SKIP ORDER] Empty ask side for token ${tokenId}`);
+  break;
+}
 
-      const minPriceAsk = orderBook.asks.reduce(
-        (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
-        orderBook.asks[0]
-      );
+// Filter valid asks
+const validAsks = orderBook.asks.filter(a =>
+  !isNaN(parseFloat(a.price)) &&
+  !isNaN(parseFloat(a.size))
+);
+
+if (validAsks.length === 0) {
+  console.warn('[SKIP ORDER] No valid asks');
+  break;
+}
+
+// Get lowest ask safely
+const minPriceAsk = validAsks.reduce((min, cur) =>
+  parseFloat(cur.price) < parseFloat(min.price) ? cur : min
+);
 
       const askPriceRaw = parseFloat(minPriceAsk.price);
+        if (!isFinite(askPriceRaw) || askPriceRaw <= 0) break;
       const askSize = parseFloat(minPriceAsk.size);
       if (isNaN(askSize) || askSize <= 0) break;
       if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
