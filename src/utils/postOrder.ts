@@ -120,12 +120,14 @@ const postSingleOrder = async (
 
     // ================= EXCHANGE COST MATH =================
     // 🔥 FIX: include fee multiplier here
-    const makerAmountFloat = takerAmount * price * effectiveFeeMultiplier;
+    const makerAmountFloat = takerAmount * price;
 
-    if (availableBalance !== undefined && makerAmountFloat * effectiveFeeMultiplier > availableBalance) {
-      console.log(`[SKIP ORDER] Not enough balance: need ${makerAmountFloat * effectiveFeeMultiplier}, have ${availableBalance}`);
-      return 0;
-    }
+    const totalCost = makerAmountFloat * effectiveFeeMultiplier;
+
+if (availableBalance !== undefined && totalCost > availableBalance) {
+  console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
+  return 0;
+}
 
     const orderArgs = {
       side,
@@ -256,7 +258,8 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
       await updateActivity();
       return;
     }
-
+let remaining = my_position.size;
+      
   if (condition === 'sell' && user_position) {
   const totalSize = (user_position.size ?? 0) + (trade.size ?? 0);
   const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
@@ -268,16 +271,17 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
 
       let orderBook;
-      try {
-        orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-        if (!orderBook || !Array.isArray(orderBook.asks) || orderBook.asks.length === 0) {
-          console.warn(`[SKIP ORDER] Empty ask side for token ${tokenId}`);
-          break;
+        try {
+          orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+        } catch (err: any) {
+          if (err.response?.status === 404) break;
+          throw err;
         }
-        catch (err: any) {
-        if (err.response?.status === 404) break;
-        throw err;
-      }
+
+            if (!orderBook || !Array.isArray(orderBook.bids) || orderBook.bids.length === 0) {
+              console.warn(`[SKIP ORDER] Empty bid side for token ${tokenId}`);
+                  break;
+        }
 
       const maxPriceBid = orderBook.bids.reduce(
         (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
@@ -332,17 +336,18 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
       if (retry >= FAST_ATTEMPTS) 
         await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
 
-      let orderBook;
-      try {
-        orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-        if (!orderBook || !Array.isArray(orderBook.bids) || orderBook.bids.length === 0) {
-  console.warn(`[SKIP ORDER] Empty order book for token ${tokenId}`);
-  break;
-}
-        catch (err: any) {
-        if (err.response?.status === 404) break;
-        throw err;
-      }
+     let orderBook;
+        try {
+          orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+            } catch (err: any) {
+          if (err.response?.status === 404) break;
+              throw err;
+        }
+
+        if (!orderBook || !Array.isArray(orderBook.asks) || orderBook.asks.length === 0) {
+          console.warn(`[SKIP ORDER] Empty ask side for token ${tokenId}`);
+          break;
+            }
 
       const minPriceAsk = orderBook.asks.reduce(
         (min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min,
