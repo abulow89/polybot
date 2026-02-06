@@ -179,7 +179,7 @@ const executeSmartOrder = async (
   shares: number,
   bestPrice: number,
   feeRateBps: number,
-  marketMinSize: number,
+  marketMinSafe: number,
   orderType: string,
   feeMultiplier: number,
   availableBalance?: number
@@ -197,7 +197,7 @@ const executeSmartOrder = async (
     shares,
     makerPrice,
     feeRateBps,
-    marketMinSize,
+    marketMinSafe,
     OrderType.GTC,
     availableBalance,
     feeMultiplier
@@ -215,7 +215,7 @@ const executeSmartOrder = async (
     shares,
     bestPrice,
     feeRateBps,
-    marketMinSize,
+    marketMinSafe,
     "FAK",
     availableBalance,
     feeMultiplier
@@ -256,8 +256,9 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
 
   const feeRateBps = market?.taker_base_fee ?? 0;
   const feeMultiplier = 1 + feeRateBps / 10000;
-  const marketMinSize = market?.min_order_size ?? 1;
+  const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 1;
 
+    
   console.log('Market info:', market);
   console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
   console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
@@ -319,7 +320,7 @@ let remaining = my_position.size;
         Math.min(remaining, parseFloat(maxPriceBid.size)),
         parseFloat(maxPriceBid.price),
         feeRateBps,
-        marketMinSize,
+        marketMinSafe,
         "SMART",
         feeMultiplier
       );
@@ -349,11 +350,11 @@ let remaining = my_position.size;
     const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
 
     const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
-    const targetExposureValue = userExposurePct * (myPortfolio * 111);
+    const targetExposureValue = userExposurePct * (myPortfolio * 33);
 
     const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
       
-    console.log(`[BUY] Mirroring user exposure (relative to balance x111):`);
+    console.log(`[BUY] Mirroring user exposure (relative to balance x33):`);
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(6)}%`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(6)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(6)}`);
@@ -400,12 +401,14 @@ const minPriceAsk = validAsks.reduce((min, cur) =>
 );
 
       const askPriceRaw = parseFloat(minPriceAsk.price);
-        if (!isFinite(askPriceRaw) || askPriceRaw <= 0) break;
+            if (!isFinite(askPriceRaw) || askPriceRaw <= 0) break;
       const askSize = parseFloat(minPriceAsk.size);
-      if (isNaN(askSize) || askSize <= 0) break;
-      if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
+          if (isNaN(askSize) || askSize <= 0) break;
+          if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
-      const marketMinSafe = marketMinSize > 0 ? marketMinSize : 1;
+      const marketMinSafe = orderBook?.min_order_size
+            ? parseFloat(orderBook.min_order_size)
+            : marketMinSize;
       let estShares = Math.min(remainingUSDC / (askPriceRaw * feeMultiplier), askSize);
 
       // 🔥 FIXED: remove redundant Math.max call
@@ -427,7 +430,7 @@ const minPriceAsk = validAsks.reduce((min, cur) =>
         sharesToBuy,
         askPriceRaw,
         feeRateBps,
-        marketMinSize,
+        marketMinSafe,
         "SMART",
         feeMultiplier,
         my_balance
