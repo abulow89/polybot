@@ -179,3 +179,4 @@ const mirrorPortfolio = async (
 };
 
 export { mirrorPortfolio, myPortfolio, targetPortfolio };
+export default mirrorPortfolio;
