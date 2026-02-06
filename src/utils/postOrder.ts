@@ -439,9 +439,13 @@ const costRounded = Math.floor(rawCost * 100) / 100; // 2 decimals
 // Recalculate shares from rounded cost
 const sharesToBuy = formatTakerAmount(costRounded / askPriceRaw); // 4 decimals
 
-      console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
-console.log(`  Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`);  // 🔹 MODIFIED
-      console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
+// 🔹 NEW: calculate actual order size including fee for logging
+const feeMultiplier = 1 + takerFeeBps / 10000;
+const sizeWithFee = formatTakerAmount(sharesToBuy * feeMultiplier);
+
+console.log(`[BUY] Attempting to buy ${sharesToBuy} shares (sizeWithFee sent: ${sizeWithFee}) at $${askPriceRaw.toFixed(4)}`);
+console.log(`  Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`);
+console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
 
       if (remainingUSDC < 0.0001) break;
 
