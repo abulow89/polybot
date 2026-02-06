@@ -2,13 +2,7 @@ import { ClobClient, OrderType, Side} from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
-// Temporary fix: extend the enum locally
-enum ExtendedOrderType {
-    GTC = "GTC",
-    FOK = "FOK",
-    IOC = "IOC",
-    FAK = "FAK",  // add FAK manually
-}
+
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
@@ -85,7 +79,7 @@ const updateDynamicExposure = (tokenId: string, filled: number) => {
   console.log(`[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
 };
 console.log(OrderType);
-// ======== POST SINGLE ORDER ====================================================
+// ================================ POST SINGLE ORDER ====================================================
 const postSingleOrder = async (
   clobClient: ClobClient,
   side: Side,
@@ -94,7 +88,7 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   marketMinSize: number,
-    extendedOrderType.FAK,          // 🔥 NEW
+  orderType: OrderType | "FAK",          // 🔥 NEW
   availableBalance?: number,
   feeMultiplier?: number
 ) => {
@@ -103,7 +97,10 @@ const postSingleOrder = async (
   // ================= PRICE + SIZE NORMALIZATION (MATCHES SCRIPT1) =================
   const price = formatPriceForOrder(priceRaw);
     // Enforce minimum shares first, then format
-  const takerAmountSafe = Math.max(amountRaw, marketMinSize);
+  const takerAmountSafe =
+  orderType === "FAK" || orderType === OrderType.FAK
+    ? amountRaw // allow partial
+    : Math.max(amountRaw, marketMinSize);
   const takerAmount = formatTakerAmount(takerAmountSafe); // Round to 4 decimals
  // ================= EXCHANGE COST MATH =================
 const makerAmountFloat = takerAmount * price;
@@ -117,9 +114,6 @@ const orderArgs = {
   tokenID: tokenId,
   size: takerAmount.toString(),
   price: price.toFixed(2),
-  feeRateBps,
-  makerAmount: makerAmountFloat.toString(),
-  takerAmount: takerAmount.toString(),
 };
 
   console.log('===== ORDER DEBUG =====');
@@ -133,7 +127,7 @@ const orderArgs = {
   const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
   if (!signedOrder) return 0;
 
-  const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType.FAK));
+  const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType as any));
   if (!resp.success) {
     console.log('Error posting order:', resp.error ?? resp);
     return 0;
@@ -142,6 +136,7 @@ const orderArgs = {
   updateDynamicExposure(tokenId, takerAmount);
   return takerAmount;
 };
+========================================SMART ORDER TYPE SWITCHER==================================
 const executeSmartOrder = async (
   clobClient: ClobClient,
   side: Side,
@@ -150,7 +145,7 @@ const executeSmartOrder = async (
   bestPrice: number,
   feeRateBps: number,
   marketMinSize: number,
- extendedOrderType.FAK,          // 🔥 NEW
+  orderType: string,          // 🔥 NEW
   feeMultiplier: number,
   availableBalance?: number
 ) => {
@@ -186,7 +181,7 @@ const executeSmartOrder = async (
   // 2️⃣ Wait briefly
   await sleep(200);
 
-  console.log(`[SMART] Maker didn't fill — switching to IOC taker`);
+  console.log(`[SMART] Maker didn't fill — switching to FAK taker`);
 
   // 3️⃣ Fallback to IOC (taker)
   return await postSingleOrder(
@@ -197,7 +192,7 @@ const executeSmartOrder = async (
     bestPrice,
     feeRateBps,
     marketMinSize,
-    extendedOrderType.FAK,
+    "FAK",
     availableBalance,
     feeMultiplier
   );
