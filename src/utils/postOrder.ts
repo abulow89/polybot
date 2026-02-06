@@ -134,14 +134,33 @@ const mirrorPortfolio = async (
     (sum, [token, shares]) => sum + shares * (marketPrices[token] ?? 0),
     0
   );
+
   const myTotal = myBalance + Object.entries(myPortfolio).reduce(
     (sum, [token, shares]) => sum + shares * (marketPrices[token] ?? 0),
     0
   );
 
   for (const [tokenId, targetShares] of Object.entries(targetPositions)) {
-    const price = marketPrices[tokenId];
-    if (!price) continue;
+    const priceRaw = marketPrices[tokenId];
+    if (!priceRaw) {
+      console.warn(`[MIRROR] Skipping ${tokenId}: price unknown`);
+      continue;
+    }
+
+    // Check if the market exists
+    let market;
+    try {
+      market = await safeCall(() => clobClient.getMarket(tokenId));
+    } catch {
+      console.warn(`[MIRROR] Skipping ${tokenId}: market not found`);
+      continue;
+    }
+
+    const marketMinSize = market?.min_order_size ?? 1;
+    const feeMultiplier = 1 + (market?.taker_base_fee ?? 0) / 10000;
+
+    // Round price to 2 decimals for CLOB
+    const price = parseFloat(formatPriceForOrder(priceRaw).toFixed(2));
 
     const targetValue = targetShares * price;
     const targetWeight = targetTotal > 0 ? targetValue / targetTotal : 0;
@@ -149,34 +168,51 @@ const mirrorPortfolio = async (
     const currentValue = (myPortfolio[tokenId] ?? 0) * price;
     const deltaValue = desiredValue - currentValue;
 
-    if (Math.abs(deltaValue) < 0.0001) continue; // skip tiny adjustments
+    // Skip tiny adjustments
+    if (Math.abs(deltaValue) < 0.0001) continue;
 
     const side = deltaValue > 0 ? Side.BUY : Side.SELL;
-    const sharesToTrade = Math.abs(deltaValue) / price;
+    let sharesToTrade = Math.abs(deltaValue) / price;
 
-    console.log(`[MIRROR] ${side === Side.BUY ? 'Buying' : 'Selling'} ${sharesToTrade.toFixed(4)} of ${tokenId} at $${price}`);
+    // Enforce minimum market size
+    if (sharesToTrade < marketMinSize) {
+      console.log(`[MIRROR] Skipping ${tokenId}, below min order size (${sharesToTrade.toFixed(4)} < ${marketMinSize})`);
+      continue;
+    }
 
-    const market = await safeCall(() => clobClient.getMarket(tokenId));
-    const feeMultiplier = 1 + (market?.taker_base_fee ?? 0) / 10000;
-    const marketMinSize = market?.min_order_size ?? 1;
+    // Round taker amount to 4 decimals
+    sharesToTrade = formatTakerAmount(sharesToTrade);
 
-    const filled = await executeSmartOrder(
-      clobClient,
-      side,
-      tokenId,
-      sharesToTrade,
-      price,
-      market?.taker_base_fee ?? 0,
-      marketMinSize,
-      feeMultiplier,
-      myBalance
-    );
+    console.log(`[MIRROR] ${side === Side.BUY ? 'Buying' : 'Selling'} ${sharesToTrade} of ${tokenId} at $${price}`);
 
+    // Execute order safely
+    let filled = 0;
+    try {
+      filled = await executeSmartOrder(
+        clobClient,
+        side,
+        tokenId,
+        sharesToTrade,
+        price,
+        market?.taker_base_fee ?? 0,
+        marketMinSize,
+        feeMultiplier,
+        myBalance
+      );
+    } catch (err) {
+      console.warn(`[MIRROR] Failed to place order for ${tokenId}:`, err.message);
+      continue;
+    }
+
+    // Update local portfolio
     if (!myPortfolio[tokenId]) myPortfolio[tokenId] = 0;
     myPortfolio[tokenId] += side === Side.BUY ? filled : -filled;
+
+    // Deduct cost from balance
     myBalance -= filled * price * feeMultiplier;
+
+    console.log(`[MIRROR] Updated ${tokenId} exposure: ${myPortfolio[tokenId]} shares, remaining balance: $${myBalance.toFixed(4)}`);
   }
 };
-
 export { mirrorPortfolio, myPortfolio, targetPortfolio };
 
