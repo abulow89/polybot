@@ -2,7 +2,7 @@ import { ClobClient, OrderType, Side} from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
-import { subscribeToMarketTrades } from './createClobClientWithWs'; // 🔹 NEW
+import { subscribeToMarketTrades } from '..utils/createClobClient'; // 🔹 NEW
 
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
