@@ -121,7 +121,6 @@ const postSingleOrder = async (
   marketMinSize: number,
   orderType: OrderType,
   availableBalance?: number,
-  feeMultiplier?: number,
   trade?: UserActivityInterface // MODIFIED: optional trade for logging
 ) => {
     if (trade) console.log('Incoming trade at postSingleOrder:', trade); // ADDED
@@ -130,10 +129,9 @@ const postSingleOrder = async (
     const takerAmountSafe = Math.max(amountRaw, marketMinSize);
     const takerAmount = formatTakerAmount(takerAmountSafe);
     const feeMultiplier = 1 + feeRateBps / 10000;
-// ================= EXCHANGE COST MATH =================
     const makerAmountFloat = takerAmount * price;
     const makerAmount = formatMakerAmount(makerAmountFloat);
-    const totalCost = makerAmount * effectiveFeeMultiplier;
+    const totalCost = makerAmount * feeMultiplier;
 
 if (availableBalance !== undefined && totalCost > availableBalance) {
   console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
@@ -154,7 +152,6 @@ if (availableBalance !== undefined && totalCost > availableBalance) {
   makerAmountFloat,
   makerAmount,
   orderArgs,
-  feeMultiplier: effectiveFeeMultiplier
 });
 
     const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
@@ -178,10 +175,9 @@ const executeSmartOrder = async (
   tokenId: string,
   shares: number,
   bestPrice: number,
-  feeRateBps: number,
+  makerFeeBps: number,
+  takerFeeBps: number,
   marketMinSafe: number,
-  orderType: string,
-  feeMultiplier: number,
   availableBalance?: number
 ) => {
   const improvement = 0.01;
@@ -200,8 +196,7 @@ const executeSmartOrder = async (
     marketMinSafe,
     OrderType.GTC,
     availableBalance,
-    feeMultiplier
-  );
+    );
 
   if (makerFilled > 0) return makerFilled;
 
@@ -218,8 +213,7 @@ const executeSmartOrder = async (
     marketMinSafe,
     OrderType.FOK,
     availableBalance,
-    feeMultiplier
-  );
+    );
 };
 
 // ======== MAIN POST ORDER FUNCTION ========
@@ -246,15 +240,18 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
     await UserActivity.updateOne({ _id: trade._id }, { bot: true });
   };
 
-  let market;
-  try {
-    market = await safeCall(() => clobClient.getMarket(marketId));
-      const makerFeeBps = Number(market?.maker_base_fee ?? 0);
-        const takerFeeBps = Number(market?.taker_base_fee ?? 0);
-  } catch (err) {
-    console.warn(`[CLOB] Could not fetch market fee or min size for ${marketId}, using 0`, err);
-    market = { taker_base_fee: 0, min_order_size: 0 };
-  }
+let market;
+let makerFeeBps = 0;
+let takerFeeBps = 0;
+
+try {
+  market = await safeCall(() => clobClient.getMarket(marketId));
+  makerFeeBps = Number(market?.maker_base_fee ?? 0);
+  takerFeeBps = Number(market?.taker_base_fee ?? 0);
+} catch (err) {
+  console.warn(`[CLOB] Could not fetch market info for ${marketId}`, err);
+  market = { taker_base_fee: 0, maker_base_fee: 0, min_order_size: 0 };
+}
 
   const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 1;
   const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
@@ -313,17 +310,16 @@ let remaining = my_position.size;
           orderBook.bids[0]
       );
 
-      const filled = await executeSmartOrder(
-        clobClient,
-        Side.SELL,
-        tokenId,
-        Math.min(remaining, parseFloat(maxPriceBid.size)),
-        parseFloat(maxPriceBid.price),
-        feeRateBps,
-        marketMinSafe,
-        "SMART",
-        feeMultiplier
-      );
+const filled = await executeSmartOrder(
+  clobClient,
+  Side.SELL,
+  tokenId,
+  Math.min(remaining, parseFloat(maxPriceBid.size)),
+  parseFloat(maxPriceBid.price),
+  makerFeeBps,
+  takerFeeBps,
+  marketMinSafe
+);
 
       if (!filled) retry++;
       else {
@@ -427,29 +423,33 @@ const sharesToBuy = formatTakerAmount(costRounded / askPriceRaw);
 
       if (remainingUSDC < 0.0001) break;
 
-      const filled = await executeSmartOrder(
-        clobClient,
-        Side.BUY,
-        tokenId,
-        sharesToBuy,
-        askPriceRaw,
-        feeRateBps,
-        marketMinSafe,
-        "SMART",
-        feeMultiplier,
-        my_balance
-      );
+const filled = await executeSmartOrder(
+  clobClient,
+  Side.BUY,
+  tokenId,
+  sharesToBuy,
+  askPriceRaw,
+  makerFeeBps,
+  takerFeeBps,
+  marketMinSafe,
+  my_balance
+);
 
       if (!filled) retry++;
       else {
         const makerAmountRounded = Math.ceil((filled * askPriceRaw) * 100) / 100;
-        remainingUSDC -= makerAmountRounded * feeMultiplier;
+        const takerMultiplier = 1 + takerFeeBps / 10000;
+let estShares = Math.min(
+  remainingUSDC / (askPriceRaw * takerMultiplier),
+  askSize
+);
         retry = 0;
 
         console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * feeMultiplier).toFixed(6)})`);
         console.log(`  Remaining USDC after order: $${remainingUSDC.toFixed(6)}`);
         console.log(`  Total dynamic exposure for token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
         console.log(`  Exposure value: $${(dynamicExposure[tokenId]*askPriceRaw).toFixed(6)}`);
+          console.log(`Fee multiplier: ${takerMultiplier.toFixed(4)}`);
       }
 
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
