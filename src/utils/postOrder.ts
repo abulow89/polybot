@@ -218,7 +218,7 @@ const mirrorPortfolio = async (
         feeMultiplier,
         myBalance
       );
-    } catch (err) {
+    } catch (err: any) {
       console.warn(`[MIRROR] Failed to place order for ${tokenId}:`, err.message);
       continue;
     }
