@@ -18,9 +18,7 @@ let temp_trades: UserActivityInterface[] = [];
 
 // Load previously seen trades
 const init = async () => {
-    temp_trades = (await UserActivity.find().exec()).map(
-        (trade) => trade as UserActivityInterface
-    );
+     temp_trades = []; // Start with an empty array
 };
 
 // Fetch the latest trades from the API
