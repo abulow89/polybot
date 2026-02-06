@@ -117,54 +117,63 @@ const postSingleOrder = async (
   tokenId: string,
   amountRaw: number,
   priceRaw: number,
-  feeRateBps: number,
+  feeRateBps: number,              // ✅ dynamic fee passed in
   marketMinSize: number,
   orderType: OrderType,
   availableBalance?: number,
-  trade?: UserActivityInterface // MODIFIED: optional trade for logging
+  trade?: UserActivityInterface
 ) => {
-    if (trade) console.log('Incoming trade at postSingleOrder:', trade); // ADDED
+    if (trade) console.log('Incoming trade at postSingleOrder:', trade);
 
     const price = formatPriceForOrder(priceRaw);
+
+    // ===== Calculate taker amount including fee =====
     const takerAmountSafe = Math.max(amountRaw, marketMinSize);
     const takerAmount = formatTakerAmount(takerAmountSafe);
+
     const feeMultiplier = 1 + feeRateBps / 10000;
+
+    // ===== Adjust size sent to CLOB to account for fees =====
+    const sizeWithFee = formatTakerAmount(takerAmount * feeMultiplier); // 🔹 NEW
+
     const makerAmountFloat = takerAmount * price;
     const makerAmount = formatMakerAmount(makerAmountFloat);
     const totalCost = makerAmount * feeMultiplier;
 
-if (availableBalance !== undefined && totalCost > availableBalance) {
-  console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
-  return 0;
-}
+    if (availableBalance !== undefined && totalCost > availableBalance) {
+      console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
+      return 0;
+    }
 
+    // ===== Pass adjusted size to CLOB =====
     const orderArgs = {
       side,
       tokenID: tokenId,
-      size: takerAmount.toString(),
+-     size: takerAmount.toString(),
++     size: sizeWithFee.toString(),       // 🔹 MODIFIED to include fee
       price: price.toFixed(2),
     };
 
     console.log('===== ORDER DEBUG =====');
     console.log({
-  price,
-  takerAmount,
-  makerAmountFloat,
-  makerAmount,
-  orderArgs,
-});
+      price,
+      takerAmount,
+      sizeWithFee,                       // 🔹 NEW
+      makerAmountFloat,
+      makerAmount,
+      orderArgs,
+    });
 
     const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
     if (!signedOrder) return 0;
 
-    // 🔥 FIX: use effectiveFeeMultiplier consistently
-const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
-     if (!resp.success) {
+    const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
+    if (!resp.success) {
       console.log('Error posting order:', resp.error ?? resp);
       return 0;
     }
 
-updateDynamicExposure(tokenId, takerAmount, side);
+    updateDynamicExposure(tokenId, takerAmount, side);
     return takerAmount;
 };
 
@@ -175,8 +184,10 @@ const executeSmartOrder = async (
   tokenId: string,
   shares: number,
   bestPrice: number,
-  makerFeeBps: number,
-  takerFeeBps: number,
+- makerFeeBps: number,
+- takerFeeBps: number,
++ makerFeeBps: number,           // ✅ kept for maker order
++ takerFeeBps: number,           // ✅ kept for taker order
   marketMinSafe: number,
   availableBalance?: number
 ) => {
@@ -185,35 +196,57 @@ const executeSmartOrder = async (
 
   console.log(`[SMART] Trying MAKER limit first at $${makerPrice.toFixed(2)}`);
 
-  // ✅ propagate feeMultiplier
-  const makerFilled = await postSingleOrder(
-    clobClient,
-    side,
-    tokenId,
-    shares,
-    makerPrice,
-    makerFeeBps,
-    marketMinSafe,
-    OrderType.GTC,
-    availableBalance,
-    );
+  // ✅ propagate feeMultiplier to postSingleOrder
+- const makerFilled = await postSingleOrder(
+-   clobClient,
+-   side,
+-   tokenId,
+-   shares,
+-   makerPrice,
+-   makerFeeBps,
+-   marketMinSafe,
+-   OrderType.GTC,
+-   availableBalance,
+- );
++ const makerFilled = await postSingleOrder(
++   clobClient,
++   side,
++   tokenId,
++   shares,
++   makerPrice,
++   makerFeeBps,            // 🔹 MODIFIED: pass makerFeeBps dynamically
++   marketMinSafe,
++   OrderType.GTC,
++   availableBalance
++ );
 
   if (makerFilled > 0) return makerFilled;
 
   await sleep(200);
   console.log(`[SMART] Maker didn't fill — switching to IOC taker`);
 
-  return await postSingleOrder(
-    clobClient,
-    side,
-    tokenId,
-    shares,
-    bestPrice,
-    takerFeeBps,
-    marketMinSafe,
-    OrderType.FOK,
-    availableBalance,
-    );
+- return await postSingleOrder(
+-   clobClient,
+-   side,
+-   tokenId,
+-   shares,
+-   bestPrice,
+-   takerFeeBps,
+-   marketMinSafe,
+-   OrderType.FOK,
+-   availableBalance,
+- );
++ return await postSingleOrder(
++   clobClient,
++   side,
++   tokenId,
++   shares,
++   bestPrice,
++   takerFeeBps,            // 🔹 MODIFIED: pass takerFeeBps dynamically
++   marketMinSafe,
++   OrderType.FOK,
++   availableBalance
++ );
 };
 
 // ======== MAIN POST ORDER FUNCTION ========
@@ -404,7 +437,7 @@ const minPriceAsk = validAsks.reduce((min, cur) =>
         
 
 let estShares = Math.min(
-  remainingUSDC / (askPriceRaw * takerMultiplier),
+  remainingUSDC / (askPriceRaw * (1 + takerFeeBps / 10000)),  // 🔹 MODIFIED: dynamic fee
   askSize
 );
         estShares = enforceMinOrder(
@@ -413,6 +446,9 @@ let estShares = Math.min(
   remainingUSDC,
   askPriceRaw,
   takerMultiplier
+  remainingUSDC,
+  askPriceRaw,
+  1 + takerFeeBps / 10000  // 🔹 MODIFIED: pass dynamic fee multiplier
 );
       const rawCost = estShares * askPriceRaw;
 
@@ -423,7 +459,7 @@ const costRounded = Math.floor(rawCost * 100) / 100;
 const sharesToBuy = formatTakerAmount(costRounded / askPriceRaw);
 
       console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
-console.log(`  Fee multiplier: ${takerMultiplier.toFixed(4)}`);
+console.log(`  Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`);  // 🔹 MODIFIED
       console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
 
       if (remainingUSDC < 0.0001) break;
@@ -443,15 +479,15 @@ const filled = await executeSmartOrder(
       if (!filled) retry++;
       else {
         const makerAmountRounded = Math.floor((filled * askPriceRaw) * 100) / 100;
-        const actualCost = makerAmountRounded * takerMultiplier;
-                remainingUSDC -= actualCost;
+        const actualCost = makerAmountRounded * (1 + takerFeeBps / 10000);  // 🔹 MODIFIED
+        remainingUSDC -= actualCost;  // ✅ now deduct cost with dynamic fee
                 retry = 0;
 
         console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * takerMultiplier).toFixed(6)})`);
         console.log(`  Remaining USDC after order: $${remainingUSDC.toFixed(6)}`);
         console.log(`  Total dynamic exposure for token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
         console.log(`  Exposure value: $${(dynamicExposure[tokenId]*askPriceRaw).toFixed(6)}`);
-          console.log(`Fee multiplier: ${takerMultiplier.toFixed(4)}`);
+        console.log(`Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`); // 🔹 MODIFIED
       }
 
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
