@@ -98,7 +98,7 @@ const postSingleOrder = async (
   const price = formatPriceForOrder(priceRaw);
     // Enforce minimum shares first, then format
   const takerAmountSafe =
-  orderType === "FAK" || orderType === OrderType.FAK
+  orderType === "FAK"
     ? amountRaw // allow partial
     : Math.max(amountRaw, marketMinSize);
   const takerAmount = formatTakerAmount(takerAmountSafe); // Round to 4 decimals
@@ -271,6 +271,7 @@ const postOrder = async (
   parseFloat(maxPriceBid.price),
   feeRateBps,
   marketMinSize,
+  "SMART",
   feeMultiplier
 );
 
@@ -372,6 +373,7 @@ const postOrder = async (
   askPriceRaw,
   feeRateBps,
   marketMinSize,
+  "SMART",
   feeMultiplier,
   my_balance
 );
