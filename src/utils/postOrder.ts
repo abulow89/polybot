@@ -177,5 +177,5 @@ const mirrorPortfolio = async (
     myBalance -= filled * price * feeMultiplier;
   }
 };
-export default postOrder;
-export { mirrorPortfolio, myPortfolio, targetPortfolio };
+
+export default { postOrder, mirrorPortfolio, myPortfolio, targetPortfolio };
