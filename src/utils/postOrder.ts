@@ -194,7 +194,7 @@ const executeSmartOrder = async (
     makerPrice,
     makerFeeBps,
     marketMinSafe,
-    OrderType.GTC,
+    OrderType = OrderType.GTC,
     availableBalance,
     );
 
