@@ -75,7 +75,7 @@ const createOrderWithRetry = async (
 const dynamicExposure: Record<string, number> = {};
 
 // Call after a successful fill to update exposure
-const updateDynamicExposure(tokenId, resp.filled_size ?? takerAmount);
+const updateDynamicExposure = (tokenId: string, filled: number) => {
   if (!dynamicExposure[tokenId]) dynamicExposure[tokenId] = 0;
   dynamicExposure[tokenId] += filled;
   console.log(`[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
