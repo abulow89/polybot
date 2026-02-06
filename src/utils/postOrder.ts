@@ -71,13 +71,22 @@ const createOrderWithRetry = async (
 // ======== DYNAMIC EXPOSURE TRACKING ========
 const dynamicExposure: Record<string, number> = {};
 
-const updateDynamicExposure = (tokenId: string, filled: number) => {
-  dynamicExposure[tokenId] = (dynamicExposure[tokenId] ?? 0) + filled;
-
+const updateDynamicExposure = (
+  tokenId: string,
+  filled: number,
+  side: Side
+) => {
+  const current = dynamicExposure[tokenId] ?? 0;
+  const newExposure =
+    side === Side.BUY
+      ? current + filled
+      : Math.max(0, current - filled); // never negative
+  dynamicExposure[tokenId] = newExposure;
   console.log(
-    `[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`
-          );
-        };
+    `[Exposure] ${Side[side]} ${filled} | Token ${tokenId} → ${newExposure} shares`
+  );
+};
+
 console.log(OrderType);
 
 // 🔥 NEW: enforce min-order size safely with feeMultiplier
@@ -157,7 +166,7 @@ if (availableBalance !== undefined && totalCost > availableBalance) {
       return 0;
     }
 
-    updateDynamicExposure(tokenId, takerAmount);
+updateDynamicExposure(tokenId, takerAmount, side);
     return takerAmount;
 };
 
