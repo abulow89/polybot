@@ -133,7 +133,7 @@ const postSingleOrder = async (
 
     // ================= EXCHANGE COST MATH =================
 const makerAmountFloat = takerAmount * price;
-const makerAmount = formatMakerAmount(makerAmountFloat.toFixed(2));
+const makerAmount = formatMakerAmount(makerAmountFloat);
 
 const totalCost = makerAmount * effectiveFeeMultiplier;
 
@@ -256,7 +256,10 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
     market = { taker_base_fee: 0, min_order_size: 0 };
   }
 
-  const feeRateBps = market?.taker_base_fee ?? 0;
+  const feeRateBps =
+  orderType === OrderType.GTC
+    ? market?.maker_base_fee ?? 0
+    : market?.taker_base_fee ?? 0;
   const feeMultiplier = 1 + feeRateBps / 10000;
   const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 1;
     const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
@@ -416,7 +419,13 @@ const minPriceAsk = validAsks.reduce((min, cur) =>
       if (estShares === 0) break;
 
 
-      const sharesToBuy = formatTakerAmount(estShares);
+      const rawCost = estShares * askPriceRaw;
+
+// Force cost to 2 decimals FIRST
+const costRounded = Math.floor(rawCost * 100) / 100;
+
+// Recalculate shares from rounded cost
+const sharesToBuy = formatTakerAmount(costRounded / askPriceRaw);
 
       console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
       console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
