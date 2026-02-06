@@ -161,7 +161,7 @@ if (availableBalance !== undefined && totalCost > availableBalance) {
     if (!signedOrder) return 0;
 
     // 🔥 FIX: use effectiveFeeMultiplier consistently
-    const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType as any));
+const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
      if (!resp.success) {
       console.log('Error posting order:', resp.error ?? resp);
       return 0;
