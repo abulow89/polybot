@@ -72,10 +72,12 @@ const createOrderWithRetry = async (
 const dynamicExposure: Record<string, number> = {};
 
 const updateDynamicExposure = (tokenId: string, filled: number) => {
-  if (!dynamicExposure[tokenId]) dynamicExposure[tokenId] = 0;
-  dynamicExposure[tokenId] += filled;
-  console.log(`[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
-};
+  dynamicExposure[tokenId] = (dynamicExposure[tokenId] ?? 0) + filled;
+
+  console.log(
+    `[Exposure] Token ${tokenId}: ${dynamicExposure[tokenId]} shares`
+          );
+        };
 console.log(OrderType);
 
 // 🔥 NEW: enforce min-order size safely with feeMultiplier
