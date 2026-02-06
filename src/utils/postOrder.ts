@@ -220,6 +220,10 @@ const postOrder = async (
 ) => {
 
   console.log('Incoming trade detected:', trade);
+if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
+  console.warn('[SKIP ORDER] Trade missing required fields:', trade);
+  return;
+}
 
   const marketId = trade.conditionId;
   const tokenId = trade.asset;
@@ -244,7 +248,7 @@ const postOrder = async (
   console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
   console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
 
-  // ======== SELL / MERGE ========
+  // ======== ========================================SELL / MERGE ==============================
   if (condition === 'merge' || condition === 'sell') {
     console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
     if (!my_position) {
@@ -253,11 +257,11 @@ const postOrder = async (
       return;
     }
 
-    let remaining = my_position.size;
-    if (condition === 'sell' && user_position) {
-      const ratio = trade.size / (user_position.size + trade.size);
-      remaining *= ratio;
-    }
+  if (condition === 'sell' && user_position) {
+  const totalSize = (user_position.size ?? 0) + (trade.size ?? 0);
+  const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
+  remaining *= ratio;
+        }
 
     let retry = 0;
     while (remaining > 0 && retry < RETRY_LIMIT) {
@@ -266,8 +270,11 @@ const postOrder = async (
       let orderBook;
       try {
         orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-        if (!orderBook || !orderBook.bids?.length) break;
-      } catch (err: any) {
+        if (!orderBook || !Array.isArray(orderBook.asks) || orderBook.asks.length === 0) {
+          console.warn(`[SKIP ORDER] Empty ask side for token ${tokenId}`);
+          break;
+        }
+        catch (err: any) {
         if (err.response?.status === 404) break;
         throw err;
       }
@@ -328,8 +335,11 @@ const postOrder = async (
       let orderBook;
       try {
         orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-        if (!orderBook || !orderBook.asks?.length) break;
-      } catch (err: any) {
+        if (!orderBook || !Array.isArray(orderBook.bids) || orderBook.bids.length === 0) {
+  console.warn(`[SKIP ORDER] Empty order book for token ${tokenId}`);
+  break;
+}
+        catch (err: any) {
         if (err.response?.status === 404) break;
         throw err;
       }
