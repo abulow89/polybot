@@ -148,8 +148,9 @@ const postSingleOrder = async (
     const orderArgs = {
       side,
       tokenID: tokenId,
-      size: sizeWithFee.toString(),       // 🔹 MODIFIED to include fee
+      size: sizeWithFee.toFixed(4),       // 🔹 MODIFIED to include fee
       price: price.toFixed(2),
+          makerAmount: makerAmount.toFixed(2), // 2 decimals
     };
 
     console.log('===== ORDER DEBUG =====');
@@ -426,10 +427,10 @@ let estShares = Math.min(
       const rawCost = estShares * askPriceRaw;
 
 // Force cost to 2 decimals FIRST
-const costRounded = Math.floor(rawCost * 100) / 100;
+const costRounded = Math.floor(rawCost * 100) / 100; // 2 decimals
 
 // Recalculate shares from rounded cost
-const sharesToBuy = formatTakerAmount(costRounded / askPriceRaw);
+const sharesToBuy = formatTakerAmount(costRounded / askPriceRaw); // 4 decimals
 
       console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
 console.log(`  Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`);  // 🔹 MODIFIED
