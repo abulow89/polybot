@@ -125,17 +125,15 @@ const postSingleOrder = async (
   trade?: UserActivityInterface // MODIFIED: optional trade for logging
 ) => {
     if (trade) console.log('Incoming trade at postSingleOrder:', trade); // ADDED
-    const effectiveFeeMultiplier = feeMultiplier ?? 1; // always default to 1 if undefined
 
     const price = formatPriceForOrder(priceRaw);
     const takerAmountSafe = Math.max(amountRaw, marketMinSize);
     const takerAmount = formatTakerAmount(takerAmountSafe);
-
-    // ================= EXCHANGE COST MATH =================
-const makerAmountFloat = takerAmount * price;
-const makerAmount = formatMakerAmount(makerAmountFloat);
-
-const totalCost = makerAmount * effectiveFeeMultiplier;
+    const feeMultiplier = 1 + feeRateBps / 10000;
+// ================= EXCHANGE COST MATH =================
+    const makerAmountFloat = takerAmount * price;
+    const makerAmount = formatMakerAmount(makerAmountFloat);
+    const totalCost = makerAmount * effectiveFeeMultiplier;
 
 if (availableBalance !== undefined && totalCost > availableBalance) {
   console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
@@ -198,7 +196,7 @@ const executeSmartOrder = async (
     tokenId,
     shares,
     makerPrice,
-    feeRateBps,
+    makerFeeBps,
     marketMinSafe,
     OrderType.GTC,
     availableBalance,
@@ -216,7 +214,7 @@ const executeSmartOrder = async (
     tokenId,
     shares,
     bestPrice,
-    feeRateBps,
+    takerFeeBps,
     marketMinSafe,
     OrderType.FOK,
     availableBalance,
@@ -251,22 +249,18 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
   let market;
   try {
     market = await safeCall(() => clobClient.getMarket(marketId));
+      const makerFeeBps = Number(market?.maker_base_fee ?? 0);
+        const takerFeeBps = Number(market?.taker_base_fee ?? 0);
   } catch (err) {
     console.warn(`[CLOB] Could not fetch market fee or min size for ${marketId}, using 0`, err);
     market = { taker_base_fee: 0, min_order_size: 0 };
   }
 
-  const feeRateBps =
-  OrderType === OrderType.GTC
-    ? market?.maker_base_fee ?? 0
-    : market?.taker_base_fee ?? 0;
-  const feeMultiplier = 1 + feeRateBps / 10000;
   const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 1;
-    const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
+  const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
 
     
   console.log('Market info:', market);
-  console.log(`[CLOB] Using feeRateBps: ${feeRateBps}, feeMultiplier: ${feeMultiplier}`);
   console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
 
   // ======== ========================================SELL / MERGE ==============================
