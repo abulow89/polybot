@@ -57,17 +57,18 @@ const executeSmartOrder = async (
   const improvement = 0.01;
   const makerPrice = side === Side.BUY ? bestPrice - improvement : bestPrice + improvement;
 
-let sharesToTrade = Math.abs(deltaValue) / price;
-
-// Clamp to what you can afford
-if (side === Side.BUY) {
-  const maxAffordableShares = myBalance / (price * feeMultiplier);
-  sharesToTrade = Math.min(sharesToTrade, maxAffordableShares);
+  // Clamp shares to what you can afford (BUY) or what you hold (SELL)
+  if (side === Side.BUY) {
+    const maxAffordableShares = availableBalance / (makerPrice * feeMultiplier);
     if (maxAffordableShares < marketMinSize) {
       console.log(`[SMART] Skipping ${tokenId} buy: not enough balance for min order size`);
       return 0;
     }
     shares = Math.min(shares, maxAffordableShares);
+  } else {
+    // SELL cannot exceed current holdings
+    shares = Math.max(0, Math.min(shares, shares)); // "shares" is already what mirrorPortfolio passed
+    if (shares < marketMinSize) return 0;
   }
 
   // Round shares to 4 decimals
