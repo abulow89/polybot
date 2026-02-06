@@ -205,26 +205,23 @@ const mirrorPortfolio = async (
     console.log(`[MIRROR] ${side === Side.BUY ? 'Buying' : 'Selling'} ${sharesToTrade} of ${tokenId} at $${price}`);
 
     // Execute order safely
-try {
-  filled = await executeSmartOrder(
-    clobClient,
-    side,
-    tokenId,
-    sharesToTrade,
-    price,
-    market?.taker_base_fee ?? 0,
-    marketMinSize,
-    feeMultiplier,
-    myBalance
-  );
-} catch (err) {
-  if (err instanceof Error) {
-    console.warn(`[MIRROR] Failed to place order for ${tokenId}:`, err.message);
-  } else {
-    console.warn(`[MIRROR] Failed to place order for ${tokenId}:`, err);
-  }
-  continue;
-}
+    let filled = 0;
+    try {
+      filled = await executeSmartOrder(
+        clobClient,
+        side,
+        tokenId,
+        sharesToTrade,
+        price,
+        market?.taker_base_fee ?? 0,
+        marketMinSize,
+        feeMultiplier,
+        myBalance
+      );
+    } catch (err) {
+      console.warn(`[MIRROR] Failed to place order for ${tokenId}:`, err.message);
+      continue;
+    }
 
     // Update local portfolio
     if (!myPortfolio[tokenId]) myPortfolio[tokenId] = 0;
