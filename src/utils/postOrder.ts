@@ -118,7 +118,7 @@ const postSingleOrder = async (
   priceRaw: number,
   feeRateBps: number,
   marketMinSize: number,
-  orderType: OrderType | "FAK",
+  orderType: OrderType,
   availableBalance?: number,
   feeMultiplier?: number,
   trade?: UserActivityInterface // MODIFIED: optional trade for logging
@@ -216,7 +216,7 @@ const executeSmartOrder = async (
     bestPrice,
     feeRateBps,
     marketMinSafe,
-    "FAK",
+    OrderType.FAK,
     availableBalance,
     feeMultiplier
   );
