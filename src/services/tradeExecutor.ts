@@ -5,7 +5,7 @@ import { getUserActivityModel } from '../models/userHistory';
 import fetchData from '../utils/fetchData';
 import spinner from '../utils/spinner';
 import getMyBalance from '../utils/getMyBalance';
-import { mirrorPortfolio, myPortfolio, targetPortfolio } from '../utils/postOrder';
+import postOrder from '../utils/postOrder';
 
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
@@ -28,7 +28,7 @@ const readTempTrade = async () => {
     ).map((trade) => trade as UserActivityInterface);
 };
 
-// Execute each trade by updating target portfolio and mirroring
+// Execute each trade
 const doTrading = async (clobClient: ClobClient) => {
     for (const trade of temp_trades) {
         const user_positions: UserPositionInterface[] = await fetchData(
@@ -38,24 +38,39 @@ const doTrading = async (clobClient: ClobClient) => {
             `https://data-api.polymarket.com/positions?user=${PROXY_WALLET}`
         );
 
-        // Build target portfolio snapshot
-        targetPortfolio[trade.asset] = trade.size ?? 0;
-
-        // Build current market prices snapshot
-        const marketPrices: Record<string, number> = {};
-        if (trade.price) marketPrices[trade.asset] = trade.price;
+        const my_position = my_positions.find(
+            (pos) => pos.conditionId === trade.conditionId
+        );
+        const user_position = user_positions.find(
+            (pos) => pos.conditionId === trade.conditionId
+        );
 
         const my_balance = await getMyBalance(PROXY_WALLET);
+        const user_balance = await getMyBalance(USER_ADDRESS);
 
         try {
-            // Mirror portfolio to match target allocations
-            await mirrorPortfolio(clobClient, marketPrices, my_balance, targetPortfolio);
+            if (trade.side === 'BUY') {
+                if (user_position && my_position && my_position.asset !== trade.asset) {
+                    await postOrder(clobClient, 'merge', my_position, user_position, trade, my_balance, user_balance);
+                } else {
+                    await postOrder(clobClient, 'buy', my_position, user_position, trade, my_balance, user_balance);
+                }
+            } else if (trade.side === 'SELL') {
+                await postOrder(clobClient, 'sell', my_position, user_position, trade, my_balance, user_balance);
+            } else {
+                // Unsupported trade type, mark as done
+                await UserActivity.updateOne(
+                    { _id: trade._id },
+                    { bot: true, botExcutedTime: trade.botExcutedTime + 1 }
+                );
+            }
 
-            // Mark trade as processed
+            // Mark successful trades
             await UserActivity.updateOne(
                 { _id: trade._id },
                 { bot: true, botExcutedTime: trade.botExcutedTime + 1 }
             );
+
         } catch (err) {
             // If trade fails, increment retry count
             await UserActivity.updateOne(
