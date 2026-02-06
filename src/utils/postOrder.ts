@@ -255,6 +255,7 @@ try {
 
   const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 1;
   const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
+    const takerMultiplier = 1 + takerFeeBps / 10000;
 
     
   console.log('Market info:', market);
@@ -402,13 +403,18 @@ const minPriceAsk = validAsks.reduce((min, cur) =>
           if (isNaN(askSize) || askSize <= 0) break;
           if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
         
-      let estShares = Math.min(remainingUSDC / (askPriceRaw * feeMultiplier), askSize);
 
-      // 🔥 FIXED: remove redundant Math.max call
-        estShares = enforceMinOrder(estShares, marketMinSafe, remainingUSDC, askPriceRaw, feeMultiplier);
-      if (estShares === 0) break;
-
-
+let estShares = Math.min(
+  remainingUSDC / (askPriceRaw * takerMultiplier),
+  askSize
+);
+        estShares = enforceMinOrder(
+  estShares,
+  marketMinSafe,
+  remainingUSDC,
+  askPriceRaw,
+  takerMultiplier
+);
       const rawCost = estShares * askPriceRaw;
 
 // Force cost to 2 decimals FIRST
@@ -418,7 +424,7 @@ const costRounded = Math.floor(rawCost * 100) / 100;
 const sharesToBuy = formatTakerAmount(costRounded / askPriceRaw);
 
       console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
-      console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
+console.log(`  Fee multiplier: ${takerMultiplier.toFixed(4)}`);
       console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
 
       if (remainingUSDC < 0.0001) break;
@@ -439,13 +445,10 @@ const filled = await executeSmartOrder(
       else {
         const makerAmountRounded = Math.ceil((filled * askPriceRaw) * 100) / 100;
         const takerMultiplier = 1 + takerFeeBps / 10000;
-let estShares = Math.min(
-  remainingUSDC / (askPriceRaw * takerMultiplier),
-  askSize
-);
+
         retry = 0;
 
-        console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * feeMultiplier).toFixed(6)})`);
+        console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * takerMultiplier).toFixed(6)})`);
         console.log(`  Remaining USDC after order: $${remainingUSDC.toFixed(6)}`);
         console.log(`  Total dynamic exposure for token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
         console.log(`  Exposure value: $${(dynamicExposure[tokenId]*askPriceRaw).toFixed(6)}`);
