@@ -133,7 +133,7 @@ const postSingleOrder = async (
 
     // ================= EXCHANGE COST MATH =================
 const makerAmountFloat = takerAmount * price;
-const makerAmount = formatMakerAmount(makerAmountFloat);
+const makerAmount = formatMakerAmount(makerAmountFloat.toFixed(2));
 
 const totalCost = makerAmount * effectiveFeeMultiplier;
 
