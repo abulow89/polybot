@@ -257,7 +257,7 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
   }
 
   const feeRateBps =
-  orderType === OrderType.GTC
+  OrderType === OrderType.GTC
     ? market?.maker_base_fee ?? 0
     : market?.taker_base_fee ?? 0;
   const feeMultiplier = 1 + feeRateBps / 10000;
