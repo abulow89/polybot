@@ -78,20 +78,23 @@ const updateDynamicExposure = (tokenId: string, filled: number) => {
 };
 console.log(OrderType);
 
-// 🔥 ADDED HELPER: enforce minimum order size (removes redundant Math.max calls)
+// 🔥 NEW: enforce min-order size safely with feeMultiplier
 const enforceMinOrder = (
-  shares: number,
-  marketMinSize: number,
+  estShares: number,
+  marketMinSafe: number,
   remainingUSDC: number,
   price: number,
   feeMultiplier: number
-): number => {
-  if (shares < marketMinSize) {
-    const minCost = marketMinSize * price * feeMultiplier;
-    if (remainingUSDC < minCost) return 0; // cannot afford min order
-    return marketMinSize;
+) => {
+  if (estShares >= marketMinSafe) return estShares;
+
+  const minCost = marketMinSafe * price * feeMultiplier;
+  if (remainingUSDC < minCost) {
+    console.log(`[SKIP ORDER] Not enough USDC for minimum order. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
+    return 0;
   }
-  return shares;
+  console.log(`[MIN ORDER ENFORCED] Bumping ${estShares.toFixed(6)} → ${marketMinSafe} shares`);
+  return marketMinSafe;
 };
 
 // ================================ POST SINGLE ORDER ====================================================
@@ -109,13 +112,15 @@ const postSingleOrder = async (
   trade?: UserActivityInterface // MODIFIED: optional trade for logging
 ) => {
     if (trade) console.log('Incoming trade at postSingleOrder:', trade); // ADDED
-    const effectiveFeeMultiplier = feeMultiplier ?? 1;
+    const effectiveFeeMultiplier = feeMultiplier ?? 1; // always default to 1 if undefined
 
     const price = formatPriceForOrder(priceRaw);
     const takerAmountSafe = orderType === "FAK" ? amountRaw : Math.max(amountRaw, marketMinSize);
     const takerAmount = formatTakerAmount(takerAmountSafe);
 
-    const makerAmountFloat = takerAmount * price;
+    // ================= EXCHANGE COST MATH =================
+    // 🔥 FIX: include fee multiplier here
+    const makerAmountFloat = takerAmount * price * effectiveFeeMultiplier;
 
     if (availableBalance !== undefined && makerAmountFloat * effectiveFeeMultiplier > availableBalance) {
       console.log(`[SKIP ORDER] Not enough balance: need ${makerAmountFloat * effectiveFeeMultiplier}, have ${availableBalance}`);
@@ -134,14 +139,16 @@ const postSingleOrder = async (
       price,
       takerAmount,
       makerAmountFloat,
-      orderArgs
+      orderArgs,
+      feeMultiplier: effectiveFeeMultiplier // 🔥 added for clarity
     });
 
     const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
     if (!signedOrder) return 0;
 
+    // 🔥 FIX: use effectiveFeeMultiplier consistently
     const resp = await safeCall(() => clobClient.postOrder(signedOrder, OrderType as any));
-    if (!resp.success) {
+     if (!resp.success) {
       console.log('Error posting order:', resp.error ?? resp);
       return 0;
     }
@@ -168,6 +175,7 @@ const executeSmartOrder = async (
 
   console.log(`[SMART] Trying MAKER limit first at $${makerPrice.toFixed(2)}`);
 
+  // ✅ propagate feeMultiplier
   const makerFilled = await postSingleOrder(
     clobClient,
     side,
