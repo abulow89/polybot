@@ -257,7 +257,7 @@ try {
   makerFeeBps = Number(market?.maker_base_fee ?? 0);
   takerFeeBps = Number(market?.taker_base_fee ?? 0);
 } catch (err: any) {
-      if (err.response?.status === 404) break;
+      if (err.response?.status === 404) break
   console.warn(`[CLOB] Could not fetch market info for ${marketId}`, err);
   market = { taker_base_fee: 0, maker_base_fee: 0, min_order_size: 0 };
 }
