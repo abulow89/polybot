@@ -151,6 +151,7 @@ const postSingleOrder = async (
       size: sizeWithFee.toFixed(4),       // 🔹 MODIFIED to include fee
       price: price.toFixed(2),
           makerAmount: makerAmount.toFixed(2), // 2 decimals
+        feeRateBps
     };
 
     console.log('===== ORDER DEBUG =====');
