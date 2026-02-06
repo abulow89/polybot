@@ -307,14 +307,17 @@ const postOrder = async (
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(2)}%`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(2)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
+   
     let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
     remainingUSDC = Math.min(remainingUSDC, my_balance);
+  
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
     let retry = 0;
+    
     while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
       if (retry >= FAST_ATTEMPTS) 
         await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
-
+    
       let orderBook;
       try {
         orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
