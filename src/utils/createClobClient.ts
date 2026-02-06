@@ -10,7 +10,8 @@ const CLOB_HTTP_URL = ENV.CLOB_HTTP_URL;
 // ✅ ADD YOUR TWO RPC URLS TO ENV
 const RPC_PRIMARY = ENV.RPC_URL1;
 const RPC_SECONDARY = ENV.RPC_URL2;
-
+console.log("RPC_PRIMARY:", RPC_PRIMARY);
+console.log("RPC_SECONDARY:", RPC_SECONDARY);
 const createClobClient = async (): Promise<ClobClient> => {
     const chainId = 137;
     const host = CLOB_HTTP_URL as string;
