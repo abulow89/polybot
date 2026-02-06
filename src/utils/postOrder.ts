@@ -52,11 +52,27 @@ const executeSmartOrder = async (
   feeRateBps: number,
   marketMinSize: number,
   feeMultiplier: number,
-  availableBalance?: number
+  availableBalance: number
 ) => {
   const improvement = 0.01;
   const makerPrice = side === Side.BUY ? bestPrice - improvement : bestPrice + improvement;
 
+  // Calculate max affordable shares if buying
+  if (side === Side.BUY) {
+    const maxAffordableShares = availableBalance / (makerPrice * feeMultiplier);
+    if (maxAffordableShares < marketMinSize) {
+      console.log(`[SMART] Skipping ${tokenId} buy: not enough balance for min order size`);
+      return 0;
+    }
+    shares = Math.min(shares, maxAffordableShares);
+  }
+
+  // Round shares to 4 decimals
+  shares = formatTakerAmount(shares);
+
+  console.log(`[SMART] Placing ${side === Side.BUY ? 'BUY' : 'SELL'} order for ${shares} of ${tokenId} at $${makerPrice.toFixed(2)}`);
+
+  // Try maker order first
   const filledMaker = await postSingleOrder(
     clobClient,
     side,
@@ -69,9 +85,12 @@ const executeSmartOrder = async (
     availableBalance,
     feeMultiplier
   );
+
   if (filledMaker > 0) return filledMaker;
 
+  // If maker fails, fallback to FAK/taker
   await sleep(200);
+
   return await postSingleOrder(
     clobClient,
     side,
