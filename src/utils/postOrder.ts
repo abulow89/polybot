@@ -108,20 +108,7 @@ const enforceMinOrder = (
   console.log(`[MIN ORDER ENFORCED] Bumping ${estShares.toFixed(6)} → ${marketMinSafe} shares`);
   return marketMinSafe;
 };
-//==================================================FEE RATE HELPER=================================
-const getFeeRateForToken = async (clobClient: ClobClient, tokenId: string) => {
-  try {
-    const res: any = await safeCall(() =>
-      clobClient.client._axios.get('/fee-rate', { params: { token_id: tokenId } })
-    );
-    return Number(res.data.fee_rate_bps ?? 0);
-  } catch (e) {
-    console.warn(`❌ Could not fetch fee rate for token ${tokenId}`, e);
-    return 0;
-  }
-};
-const feeRateBps = await getFeeRateForToken(clobClient, tokenId);
-const feeMultiplier = 1 + feeRateBps / 10000;
+
 // ================================ POST SINGLE ORDER ====================================================
 const postSingleOrder = async (
   clobClient: ClobClient,
@@ -142,8 +129,8 @@ const postSingleOrder = async (
     // ===== Calculate taker amount including fee =====
     const takerAmountSafe = Math.max(amountRaw, marketMinSize);
     const takerAmount = formatTakerAmount(takerAmountSafe);
-     
 
+    const feeMultiplier = 1 + feeRateBps / 10000;
 
     // ===== Adjust size sent to CLOB to account for fees =====
     const sizeWithFee = formatTakerAmount(takerAmount * feeMultiplier); // 🔹 NEW
@@ -151,8 +138,7 @@ const postSingleOrder = async (
     const makerAmountFloat = takerAmount * price;
     const makerAmount = formatMakerAmount(makerAmountFloat);
     const totalCost = makerAmount * feeMultiplier;
-   
-    
+
     if (availableBalance !== undefined && totalCost > availableBalance) {
       console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
       return 0;
@@ -165,7 +151,6 @@ const postSingleOrder = async (
       size: sizeWithFee.toFixed(4),       // 🔹 MODIFIED to include fee
       price: price.toFixed(2),
           makerAmount: makerAmount.toFixed(2), // 2 decimals
-        feeRateBps
     };
 
     console.log('===== ORDER DEBUG =====');
