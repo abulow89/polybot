@@ -178,4 +178,4 @@ const mirrorPortfolio = async (
   }
 };
 
-export default { postOrder, mirrorPortfolio, myPortfolio, targetPortfolio };
+export { postOrder, mirrorPortfolio, myPortfolio, targetPortfolio };
