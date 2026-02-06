@@ -349,14 +349,14 @@ let remaining = my_position.size;
     const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
 
     const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
-    const targetExposureValue = userExposurePct * myPortfolio;
+    const targetExposureValue = userExposurePct * (myPortfolio * 2);
 
     const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
       
-    console.log(`[BUY] Mirroring user exposure (relative to balance):`);
-    console.log(`  User exposure %: ${(userExposurePct*100).toFixed(2)}%`);
-    console.log(`  Target exposure for you: $${targetExposureValue.toFixed(2)}`);
-    console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
+    console.log(`[BUY] Mirroring user exposure (relative to balance x2):`);
+    console.log(`  User exposure %: ${(userExposurePct*100).toFixed(4)}%`);
+    console.log(`  Target exposure for you: $${targetExposureValue.toFixed(4)}`);
+    console.log(`  Current exposure: $${currentExposureValue.toFixed(4)}`);
     let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
     remainingUSDC = Math.min(remainingUSDC, my_balance);
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
