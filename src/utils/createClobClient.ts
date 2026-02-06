@@ -12,34 +12,34 @@ const RPC_PRIMARY = ENV.RPC_URL1;
 const RPC_SECONDARY = ENV.RPC_URL2;
 console.log("RPC_PRIMARY:", RPC_PRIMARY);
 console.log("RPC_SECONDARY:", RPC_SECONDARY);
+
 const createClobClient = async (): Promise<ClobClient> => {
     const chainId = 137;
     const host = CLOB_HTTP_URL as string;
-    
-    const tryProvider = async (url: string) => {
-  const provider = new ethers.providers.JsonRpcProvider(url, {
-    name: "matic",
-    chainId: 137
-  });
 
-  await provider.getBlockNumber();
-  return provider;
-};
+    // Create providers for FallbackProvider
+    const providers = [
+        new ethers.providers.JsonRpcProvider(RPC_PRIMARY, { name: "matic", chainId }),
+        new ethers.providers.JsonRpcProvider(RPC_SECONDARY, { name: "matic", chainId })
+    ];
 
-let provider;
+    // The second argument '1' means quorum=1, i.e., any single provider responding is enough
+    const provider = new ethers.providers.FallbackProvider(providers, 1);
 
-try {
-  provider = await tryProvider(RPC_PRIMARY);
-  console.log("✅ Using PRIMARY RPC");
-} catch (err) {
-  console.warn("⚠️ Primary RPC failed, switching to secondary...");
-  provider = await tryProvider(RPC_SECONDARY);
-  console.log("✅ Using SECONDARY RPC");
-}
-    
-// Attach provider to wallet
-const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
+    // Test provider before creating wallet
+    try {
+        const block = await provider.getBlockNumber();
+        console.log("✅ Connected to Polygon network, latest block:", block);
+    } catch (err) {
+        console.error("❌ FallbackProvider could not connect to any RPC:", err);
+        throw err;
+    }
+
+    // Attach provider to wallet
+    const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
     console.log("Wallet created, address:", wallet.address);
+
+    // Initialize ClobClient without creds first
     let clobClient = new ClobClient(
         host,
         chainId,
@@ -49,35 +49,34 @@ const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
         PROXY_WALLET as string,
     );
 
-const originalConsoleError = console.error;
-       console.error = function () {};
-   let creds;
+    // Suppress console errors temporarily
+    const originalConsoleError = console.error;
+    console.error = function () {};
 
-try {
-  creds = await clobClient.createApiKey();
-} catch (err) {
-  console.warn("createApiKey failed, deriving instead...");
-  creds = await clobClient.deriveApiKey();
-}
-
-       console.error = originalConsoleError;
-   if (creds.key) {
-        console.log('API Key created', creds);
-   } else {
+    let creds;
+    try {
+        creds = await clobClient.createApiKey();
+        console.log("API Key created", creds);
+    } catch (err) {
+        console.warn("createApiKey failed, deriving instead...");
         creds = await clobClient.deriveApiKey();
-        console.log('API Key derived', creds);
+        console.log("API Key derived", creds);
     }
 
+    console.error = originalConsoleError;
+
+    // Re-initialize ClobClient with credentials
     clobClient = new ClobClient(
-    host,
-    chainId,
-    wallet,
-    creds,
-    SignatureType.POLY_GNOSIS_SAFE,
-    PROXY_WALLET as string,
+        host,
+        chainId,
+        wallet,
+        creds,
+        SignatureType.POLY_GNOSIS_SAFE,
+        PROXY_WALLET as string,
     );
-    console.log(clobClient);
+
+    console.log("ClobClient ready:", clobClient);
     return clobClient;
-    };
+};
 
 export default createClobClient;
