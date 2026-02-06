@@ -2,7 +2,6 @@ import { ClobClient, OrderType, Side} from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
-import { subscribeToMarketTrades } from '..utils/createClobClient'; // 🔹 NEW
 
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
@@ -14,7 +13,6 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 const FAST_ATTEMPTS = 2;
-
 
 // ======== COOLDOWN HELPERS ========
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -100,7 +98,7 @@ const postSingleOrder = async (
   const price = formatPriceForOrder(priceRaw);
     // Enforce minimum shares first, then format
   const takerAmountSafe =
-  orderType === "FAK"
+  orderType === "FAK" || orderType === OrderType.FAK
     ? amountRaw // allow partial
     : Math.max(amountRaw, marketMinSize);
   const takerAmount = formatTakerAmount(takerAmountSafe); // Round to 4 decimals
@@ -273,7 +271,6 @@ const postOrder = async (
   parseFloat(maxPriceBid.price),
   feeRateBps,
   marketMinSize,
-  "SMART",
   feeMultiplier
 );
 
@@ -307,17 +304,14 @@ const postOrder = async (
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(2)}%`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(2)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(2)}`);
-   
     let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
     remainingUSDC = Math.min(remainingUSDC, my_balance);
-  
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
     let retry = 0;
-    
     while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
       if (retry >= FAST_ATTEMPTS) 
         await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
-    
+
       let orderBook;
       try {
         orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
@@ -339,28 +333,27 @@ const postOrder = async (
 
       // --- Estimate shares affordable (MATCHES SCRIPT1) ---
       const marketMinSafe = marketMinSize > 0 ? marketMinSize : 1;
-
-// Calculate max shares you can afford with remaining USDC
-let estShares = Math.min(
-    remainingUSDC / (askPriceRaw * feeMultiplier),
-    askSize
-);
-
-// Enforce the market minimum dynamically
-if (estShares < marketMinSafe) {
-    const minCost = marketMinSafe * askPriceRaw * feeMultiplier;
-
-    if (remainingUSDC < minCost) {
-        console.log(`[SKIP ORDER] Not enough USDC to cover minimum order size. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
-        break;
-    }
-    console.log(`[MIN ORDER ENFORCED] Bumping order from ${estShares.toFixed(6)} → ${marketMinSafe} shares to meet minimum order size`);
-    estShares = marketMinSafe;
-}
-
-// Round exactly like order will (4 decimals)
-const sharesToBuy = formatTakerAmount(Math.max(estShares, marketMinSafe));
-
+      
+      // Calculate max shares you can afford with remaining USDC
+      let estShares = Math.min(
+        remainingUSDC / (askPriceRaw * feeMultiplier),
+        askSize
+      );
+      
+      // Enforce the market minimum dynamically
+      if (estShares < marketMinSafe) {
+        const minCost = marketMinSafe * askPriceRaw * feeMultiplier;
+        
+        if (remainingUSDC < minCost) {
+          console.log(`[SKIP ORDER] Not enough USDC to cover minimum order size. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
+          break;
+        }
+        console.log(`[MIN ORDER ENFORCED] Bumping order from ${estShares.toFixed(6)} → ${marketMinSafe} shares to meet minimum order size`);
+        estShares = marketMinSafe;
+      }
+      
+      // Round exactly like order will (MATCHES SCRIPT1)
+      const sharesToBuy = formatTakerAmount(Math.max(estShares, marketMinSafe));
 
       console.log(`[BUY] Attempting to buy ${sharesToBuy} shares at $${askPriceRaw.toFixed(2)}`);
       console.log(`  Fee multiplier: ${feeMultiplier.toFixed(4)}`);
@@ -379,7 +372,6 @@ const sharesToBuy = formatTakerAmount(Math.max(estShares, marketMinSafe));
   askPriceRaw,
   feeRateBps,
   marketMinSize,
-  "SMART",
   feeMultiplier,
   my_balance
 );
@@ -391,7 +383,7 @@ const sharesToBuy = formatTakerAmount(Math.max(estShares, marketMinSafe));
         remainingUSDC -= makerAmountRounded * feeMultiplier;
         retry = 0;
 
-        console.log(`  [BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * feeMultiplier).toFixed(6)})`);
+        console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * feeMultiplier).toFixed(6)})`);
         console.log(`  Remaining USDC after order: $${remainingUSDC.toFixed(6)}`);
         console.log(`  Total dynamic exposure for token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
         console.log(`  Exposure value: $${(dynamicExposure[tokenId]*askPriceRaw).toFixed(6)}`);
