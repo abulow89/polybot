@@ -7,8 +7,9 @@ import { ENV } from '../config/env';
 // ===== EXCHANGE FORMAT HELPERS =====
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
-// Taker amount rounding — round down to 4 decimals (max accuracy for API)
+//  amount rounding — round down to 4 decimals (max accuracy for API)
 const formatTakerAmount = (a: number) => Math.floor(a * 10000) / 10000; // 4 decimals max
+const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100;
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
@@ -131,10 +132,10 @@ const postSingleOrder = async (
     const takerAmount = formatTakerAmount(takerAmountSafe);
 
     // ================= EXCHANGE COST MATH =================
-    // 🔥 FIX: include fee multiplier here
-    const makerAmountFloat = takerAmount * price;
+const makerAmountFloat = takerAmount * price;
+const makerAmount = formatMakerAmount(makerAmountFloat);
 
-    const totalCost = makerAmountFloat * effectiveFeeMultiplier;
+const totalCost = makerAmount * effectiveFeeMultiplier;
 
 if (availableBalance !== undefined && totalCost > availableBalance) {
   console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
@@ -150,12 +151,13 @@ if (availableBalance !== undefined && totalCost > availableBalance) {
 
     console.log('===== ORDER DEBUG =====');
     console.log({
-      price,
-      takerAmount,
-      makerAmountFloat,
-      orderArgs,
-      feeMultiplier: effectiveFeeMultiplier // 🔥 added for clarity
-    });
+  price,
+  takerAmount,
+  makerAmountFloat,
+  makerAmount,
+  orderArgs,
+  feeMultiplier: effectiveFeeMultiplier
+});
 
     const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
     if (!signedOrder) return 0;
