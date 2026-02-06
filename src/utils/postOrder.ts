@@ -252,10 +252,10 @@ try {
   console.warn(`[CLOB] Could not fetch market info for ${marketId}`, err);
   market = { taker_base_fee: 0, maker_base_fee: 0, min_order_size: 0 };
 }
-
-  const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 5;
-  const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
-    const takerMultiplier = 1 + takerFeeBps / 10000;
+const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+const marketMinSize = orderBook?.min_order_size ? parseFloat(orderBook.min_order_size) : 1;
+const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
+const takerMultiplier = 1 + takerFeeBps / 10000;
 
     
   console.log('Market info:', market);
