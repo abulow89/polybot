@@ -95,7 +95,7 @@ const postSingleOrder = async (
     
   console.log('=== Incoming target trade ===');
   console.log(trade); // logs all fields from UserActivityInterface
-    
+}
     const effectiveFeeMultiplier = feeMultiplier ?? 1;
   // ================= PRICE + SIZE NORMALIZATION (MATCHES SCRIPT1) =================
   const price = formatPriceForOrder(priceRaw);
