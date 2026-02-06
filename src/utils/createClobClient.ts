@@ -15,14 +15,23 @@ const createClobClient = async (): Promise<ClobClient> => {
     const chainId = 137;
     const host = CLOB_HTTP_URL as string;
     
-    const providers = [
-    new ethers.providers.JsonRpcProvider(RPC_PRIMARY, { name: "matic", chainId: 137 }),
-    new ethers.providers.JsonRpcProvider(RPC_SECONDARY, { name: "matic", chainId: 137 })
-];
+    const tryProvider = async (url: string) => {
+  const provider = new ethers.providers.JsonRpcProvider(url);
+  await provider.getBlockNumber(); // test RPC
+  return provider;
+};
 
-// Fallback provider = auto failover
-const provider = new ethers.providers.FallbackProvider(providers, 1);
+let provider;
 
+try {
+  provider = await tryProvider(RPC_PRIMARY);
+  console.log("✅ Using PRIMARY RPC");
+} catch (err) {
+  console.warn("⚠️ Primary RPC failed, switching to secondary...");
+  provider = await tryProvider(RPC_SECONDARY);
+  console.log("✅ Using SECONDARY RPC");
+}
+    
 // Attach provider to wallet
 const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
     let clobClient = new ClobClient(
@@ -36,7 +45,15 @@ const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
 
 const originalConsoleError = console.error;
        console.error = function () {};
-   let creds = await clobClient.createApiKey();
+   let creds;
+
+try {
+  creds = await clobClient.createApiKey();
+} catch (err) {
+  console.warn("createApiKey failed, deriving instead...");
+  creds = await clobClient.deriveApiKey();
+}
+
        console.error = originalConsoleError;
    if (creds.key) {
         console.log('API Key created', creds);
