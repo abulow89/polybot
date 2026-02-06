@@ -253,7 +253,7 @@ try {
   market = { taker_base_fee: 0, maker_base_fee: 0, min_order_size: 0 };
 }
 
-  const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 1;
+  const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 5;
   const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
     const takerMultiplier = 1 + takerFeeBps / 10000;
 
