@@ -127,7 +127,7 @@ const postSingleOrder = async (
     const effectiveFeeMultiplier = feeMultiplier ?? 1; // always default to 1 if undefined
 
     const price = formatPriceForOrder(priceRaw);
-    const takerAmountSafe = orderType === "FAK" ? amountRaw : Math.max(amountRaw, marketMinSize);
+    const takerAmountSafe = Math.max(amountRaw, marketMinSize);
     const takerAmount = formatTakerAmount(takerAmountSafe);
 
     // ================= EXCHANGE COST MATH =================
@@ -206,7 +206,7 @@ const executeSmartOrder = async (
   if (makerFilled > 0) return makerFilled;
 
   await sleep(200);
-  console.log(`[SMART] Maker didn't fill — switching to FAK taker`);
+  console.log(`[SMART] Maker didn't fill — switching to IOC taker`);
 
   return await postSingleOrder(
     clobClient,
@@ -216,7 +216,7 @@ const executeSmartOrder = async (
     bestPrice,
     feeRateBps,
     marketMinSafe,
-    OrderType.FOK,
+    OrderType.IOC,
     availableBalance,
     feeMultiplier
   );
