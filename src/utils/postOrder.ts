@@ -90,9 +90,10 @@ const postSingleOrder = async (
   marketMinSize: number,
   orderType: OrderType | "FAK",          // 🔥 NEW
   availableBalance?: number,
-  feeMultiplier?: number
+  feeMultiplier?: number,
+  trade?: UserActivityInterface // MODIFIED: optional trade parameter for logging
 ) => {
-  
+    if (trade) console.log('Incoming trade at postSingleOrder:', trade); // ADDED
     const effectiveFeeMultiplier = feeMultiplier ?? 1;
   // ================= PRICE + SIZE NORMALIZATION (MATCHES SCRIPT1) =================
   const price = formatPriceForOrder(priceRaw);
@@ -207,6 +208,10 @@ const postOrder = async (
   my_balance: number,
   user_balance: number
 ) => {
+
+// 🔥 ADDED: log the full trade object when a trade is detected
+  console.log('Incoming trade detected:', trade); // ADDED
+    
   const marketId = trade.conditionId;
   const tokenId = trade.asset;
 
