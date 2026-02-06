@@ -17,8 +17,12 @@ const createClobClient = async (): Promise<ClobClient> => {
     const host = CLOB_HTTP_URL as string;
     
     const tryProvider = async (url: string) => {
-  const provider = new ethers.providers.JsonRpcProvider(url);
-  await provider.getBlockNumber(); // test RPC
+  const provider = new ethers.providers.JsonRpcProvider(url, {
+    name: "matic",
+    chainId: 137
+  });
+
+  await provider.getBlockNumber();
   return provider;
 };
 
@@ -35,6 +39,7 @@ try {
     
 // Attach provider to wallet
 const wallet = new ethers.Wallet(PRIVATE_KEY as string, provider);
+    console.log("Wallet created, address:", wallet.address);
     let clobClient = new ClobClient(
         host,
         chainId,
