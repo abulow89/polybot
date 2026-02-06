@@ -4,6 +4,13 @@ import createClobClient from './utils/createClobClient';
 import tradeExecutor from './services/tradeExecutor';
 import tradeMonitor from './services/tradeMonitor';
 import test from './test/test';
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🚨 UNHANDLED REJECTION:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("🚨 UNCAUGHT EXCEPTION:", error);
+});
 
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const PROXY_WALLET = ENV.PROXY_WALLET;
@@ -18,4 +25,6 @@ export const main = async () => {
     // test(clobClient);
 };
 
-main();
+main().catch((err) => {
+  console.error("🚨 FATAL ERROR IN MAIN:", err);
+});
