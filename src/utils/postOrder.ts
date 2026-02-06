@@ -183,7 +183,7 @@ const mirrorPortfolio = async (
   const feeMultiplier = 1 + (market?.taker_base_fee ?? 0) / 10000;
 
   // Round price to 2 decimals for CLOB
-  const price = parseFloat(formatPriceForOrder(priceRaw).toFixed(2));
+  const price = parseFloat(formatPriceForOrder(priceRaw));
 
   const targetValue = targetShares * price;
   const targetWeight = targetTotal > 0 ? targetValue / targetTotal : 0;
