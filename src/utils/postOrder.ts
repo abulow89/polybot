@@ -136,7 +136,7 @@ const orderArgs = {
   updateDynamicExposure(tokenId, takerAmount);
   return takerAmount;
 };
-========================================SMART ORDER TYPE SWITCHER==================================
+//========================================SMART ORDER TYPE SWITCHER==================================
 const executeSmartOrder = async (
   clobClient: ClobClient,
   side: Side,
