@@ -194,7 +194,7 @@ const executeSmartOrder = async (
     makerPrice,
     makerFeeBps,
     marketMinSafe,
-    OrderType = OrderType.GTC,
+    OrderType.GTC,
     availableBalance,
     );
 
@@ -252,8 +252,8 @@ try {
   console.warn(`[CLOB] Could not fetch market info for ${marketId}`, err);
   market = { taker_base_fee: 0, maker_base_fee: 0, min_order_size: 0 };
 }
-const orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-const marketMinSize = orderBook?.min_order_size ? parseFloat(orderBook.min_order_size) : 1;
+const orderBook = await safeCall(() => clobClient.getOrderBookSummary(tokenId));
+const marketMinSize = orderBookSummary?.min_order_size ? parseFloat(orderBookSummary.min_order_size) : 1;
 const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
 const takerMultiplier = 1 + takerFeeBps / 10000;
 
