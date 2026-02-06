@@ -1,6 +1,5 @@
-// createClobClientWithWs.ts
 import { ethers } from 'ethers';
-import { ClobClient, Side } from '@polymarket/clob-client';
+import { ClobClient } from '@polymarket/clob-client';
 import { SignatureType } from '@polymarket/order-utils';
 import { ENV } from '../config/env';
 
@@ -76,13 +75,10 @@ export const createClobClient = async (): Promise<ClobClient> => {
     return clobClient;
 };
 
-// 🔹 Example usage: subscribe to trades for a market
+// 🔹 Example: create client and subscribe to trades
 export const initTradingMonitor = async (conditionId: string) => {
     const clobClient = await createClobClient();
-
-    // Subscribe to market trades
     subscribeToMarketTrades(clobClient, conditionId);
-
-    // Optionally, you can also post orders here or track dynamic exposure
-    // Example: postOrder(clobClient, ...);
 };
+
+export default createClobClient;
