@@ -1,4 +1,4 @@
-
+9
 import { ClobClient, OrderType, Side} from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
@@ -257,6 +257,7 @@ if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
   const feeRateBps = market?.taker_base_fee ?? 0;
   const feeMultiplier = 1 + feeRateBps / 10000;
   const marketMinSize = market?.min_order_size ? parseFloat(market.min_order_size) : 1;
+    const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
 
     
   console.log('Market info:', market);
@@ -406,14 +407,7 @@ const minPriceAsk = validAsks.reduce((min, cur) =>
           if (isNaN(askSize) || askSize <= 0) break;
           if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
-      const marketMinSafe = orderBook?.min_order_size
-            ? parseFloat(orderBook.min_order_size)
-            : marketMinSize;
-      let estShares = Math.min(remainingUSDC / (askPriceRaw * feeMultiplier), askSize);
-
-      // 🔥 FIXED: remove redundant Math.max call
-      estShares = enforceMinOrder(estShares, marketMinSafe, remainingUSDC, askPriceRaw, feeMultiplier);
-      if (estShares === 0) break;
+      let estShares = enforceMinOrder(estShares, marketMinSafe, remainingUSDC, askPriceRaw, feeMultiplier);
 
       const sharesToBuy = formatTakerAmount(estShares);
 
