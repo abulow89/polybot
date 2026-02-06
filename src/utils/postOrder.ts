@@ -407,7 +407,7 @@ const minPriceAsk = validAsks.reduce((min, cur) =>
           if (isNaN(askSize) || askSize <= 0) break;
           if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
 
-      let estShares = enforceMinOrder(estShares, marketMinSafe, remainingUSDC, askPriceRaw, feeMultiplier);
+      estShares = enforceMinOrder(estShares, marketMinSafe, remainingUSDC, askPriceRaw, feeMultiplier);
 
       const sharesToBuy = formatTakerAmount(estShares);
 
