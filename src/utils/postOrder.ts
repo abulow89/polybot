@@ -444,9 +444,6 @@ let estShares = Math.min(
   marketMinSafe,
   remainingUSDC,
   askPriceRaw,
-  takerMultiplier
-  remainingUSDC,
-  askPriceRaw,
   1 + takerFeeBps / 10000  // 🔹 MODIFIED: pass dynamic fee multiplier
 );
       const rawCost = estShares * askPriceRaw;
