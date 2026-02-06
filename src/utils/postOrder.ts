@@ -57,9 +57,12 @@ const executeSmartOrder = async (
   const improvement = 0.01;
   const makerPrice = side === Side.BUY ? bestPrice - improvement : bestPrice + improvement;
 
-  // Calculate max affordable shares if buying
-  if (side === Side.BUY) {
-    const maxAffordableShares = availableBalance / (makerPrice * feeMultiplier);
+let sharesToTrade = Math.abs(deltaValue) / price;
+
+// Clamp to what you can afford
+if (side === Side.BUY) {
+  const maxAffordableShares = myBalance / (price * feeMultiplier);
+  sharesToTrade = Math.min(sharesToTrade, maxAffordableShares);
     if (maxAffordableShares < marketMinSize) {
       console.log(`[SMART] Skipping ${tokenId} buy: not enough balance for min order size`);
       return 0;
@@ -160,78 +163,92 @@ const mirrorPortfolio = async (
   );
 
   for (const [tokenId, targetShares] of Object.entries(targetPositions)) {
-    const priceRaw = marketPrices[tokenId];
-    if (!priceRaw) {
-      console.warn(`[MIRROR] Skipping ${tokenId}: price unknown`);
-      continue;
-    }
-
-    // Check if the market exists
-    let market;
-    try {
-      market = await safeCall(() => clobClient.getMarket(tokenId));
-    } catch {
-      console.warn(`[MIRROR] Skipping ${tokenId}: market not found`);
-      continue;
-    }
-
-    const marketMinSize = market?.min_order_size ?? 1;
-    const feeMultiplier = 1 + (market?.taker_base_fee ?? 0) / 10000;
-
-    // Round price to 2 decimals for CLOB
-    const price = parseFloat(formatPriceForOrder(priceRaw).toFixed(2));
-
-    const targetValue = targetShares * price;
-    const targetWeight = targetTotal > 0 ? targetValue / targetTotal : 0;
-    const desiredValue = targetWeight * myTotal;
-    const currentValue = (myPortfolio[tokenId] ?? 0) * price;
-    const deltaValue = desiredValue - currentValue;
-
-    // Skip tiny adjustments
-    if (Math.abs(deltaValue) < 0.0001) continue;
-
-    const side = deltaValue > 0 ? Side.BUY : Side.SELL;
-    let sharesToTrade = Math.abs(deltaValue) / price;
-
-    // Enforce minimum market size
-    if (sharesToTrade < marketMinSize) {
-      console.log(`[MIRROR] Skipping ${tokenId}, below min order size (${sharesToTrade.toFixed(4)} < ${marketMinSize})`);
-      continue;
-    }
-
-    // Round taker amount to 4 decimals
-    sharesToTrade = formatTakerAmount(sharesToTrade);
-
-    console.log(`[MIRROR] ${side === Side.BUY ? 'Buying' : 'Selling'} ${sharesToTrade} of ${tokenId} at $${price}`);
-
-    // Execute order safely
-    let filled = 0;
-    try {
-      filled = await executeSmartOrder(
-        clobClient,
-        side,
-        tokenId,
-        sharesToTrade,
-        price,
-        market?.taker_base_fee ?? 0,
-        marketMinSize,
-        feeMultiplier,
-        myBalance
-      );
-    } catch (err: any) {
-      console.warn(`[MIRROR] Failed to place order for ${tokenId}:`, err.message);
-      continue;
-    }
-
-    // Update local portfolio
-    if (!myPortfolio[tokenId]) myPortfolio[tokenId] = 0;
-    myPortfolio[tokenId] += side === Side.BUY ? filled : -filled;
-
-    // Deduct cost from balance
-    myBalance -= filled * price * feeMultiplier;
-
-    console.log(`[MIRROR] Updated ${tokenId} exposure: ${myPortfolio[tokenId]} shares, remaining balance: $${myBalance.toFixed(4)}`);
+  const priceRaw = marketPrices[tokenId];
+  if (!priceRaw) {
+    console.warn(`[MIRROR] Skipping ${tokenId}: price unknown`);
+    continue;
   }
+
+  // Check if the market exists
+  let market;
+  try {
+    market = await safeCall(() => clobClient.getMarket(tokenId));
+  } catch {
+    console.warn(`[MIRROR] Skipping ${tokenId}: market not found`);
+    continue;
+  }
+
+  const marketMinSize = market?.min_order_size ?? 1;
+  const feeMultiplier = 1 + (market?.taker_base_fee ?? 0) / 10000;
+
+  // Round price to 2 decimals for CLOB
+  const price = parseFloat(formatPriceForOrder(priceRaw).toFixed(2));
+
+  const targetValue = targetShares * price;
+  const targetWeight = targetTotal > 0 ? targetValue / targetTotal : 0;
+  const desiredValue = targetWeight * myTotal;
+  const currentValue = (myPortfolio[tokenId] ?? 0) * price;
+  let deltaValue = desiredValue - currentValue;
+
+  // Skip tiny adjustments
+  if (Math.abs(deltaValue) < 0.0001) continue;
+
+  const side = deltaValue > 0 ? Side.BUY : Side.SELL;
+  let sharesToTrade = Math.abs(deltaValue) / price;
+
+  // Enforce min market size
+  if (sharesToTrade < marketMinSize) {
+    console.log(`[MIRROR] Skipping ${tokenId}, below min order size (${sharesToTrade.toFixed(4)} < ${marketMinSize})`);
+    continue;
+  }
+
+  // --- NEW: clamp shares to available cash / holdings ---
+  if (side === Side.BUY) {
+    const maxAffordableShares = myBalance / (price * feeMultiplier);
+    sharesToTrade = Math.min(sharesToTrade, maxAffordableShares);
+    if (sharesToTrade < marketMinSize) {
+      console.log(`[MIRROR] Skipping ${tokenId}, not enough cash for min order size`);
+      continue;
+    }
+  } else {
+    // SELL cannot exceed current holdings
+    sharesToTrade = Math.min(sharesToTrade, myPortfolio[tokenId] ?? 0);
+    if (sharesToTrade < marketMinSize) continue;
+  }
+
+  // Round taker amount to 4 decimals
+  sharesToTrade = formatTakerAmount(sharesToTrade);
+
+  console.log(`[MIRROR] ${side === Side.BUY ? 'Buying' : 'Selling'} ${sharesToTrade} of ${tokenId} at $${price}`);
+
+  // Execute order safely
+  let filled = 0;
+  try {
+    filled = await executeSmartOrder(
+      clobClient,
+      side,
+      tokenId,
+      sharesToTrade,
+      price,
+      market?.taker_base_fee ?? 0,
+      marketMinSize,
+      feeMultiplier,
+      myBalance
+    );
+  } catch (err: any) {
+    console.warn(`[MIRROR] Failed to place order for ${tokenId}:`, err.message);
+    continue;
+  }
+
+  // Update local portfolio
+  if (!myPortfolio[tokenId]) myPortfolio[tokenId] = 0;
+  myPortfolio[tokenId] += side === Side.BUY ? filled : -filled;
+
+  // Deduct cost from balance
+  myBalance -= filled * price * feeMultiplier;
+
+  console.log(`[MIRROR] Updated ${tokenId} exposure: ${myPortfolio[tokenId]} shares, remaining balance: $${myBalance.toFixed(4)}`);
+}
 };
 export { mirrorPortfolio, myPortfolio, targetPortfolio };
 
