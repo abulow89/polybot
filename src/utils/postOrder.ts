@@ -443,10 +443,10 @@ const filled = await executeSmartOrder(
 
       if (!filled) retry++;
       else {
-        const makerAmountRounded = Math.ceil((filled * askPriceRaw) * 100) / 100;
-        const takerMultiplier = 1 + takerFeeBps / 10000;
-
-        retry = 0;
+        const makerAmountRounded = Math.floor((filled * askPriceRaw) * 100) / 100;
+        const actualCost = makerAmountRounded * takerMultiplier;
+                remainingUSDC -= actualCost;
+                retry = 0;
 
         console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * takerMultiplier).toFixed(6)})`);
         console.log(`  Remaining USDC after order: $${remainingUSDC.toFixed(6)}`);
