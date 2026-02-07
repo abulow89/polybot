@@ -373,7 +373,25 @@ const takerMultiplier = 1 + takerFeeBps / 10000;
           return;
             }
     const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
+// ✅ NEW: Filter by exposure threshold
+  const MIN_EXPOSURE_PCT = 0.05; // Only mirror trades that are 10%+ of user's portfolio
+  const MIN_TRADE_SIZE_USD = 3.00; // Only mirror trades >= $5,000
+  
+  if (userExposurePct < MIN_EXPOSURE_PCT) {
+    console.log(`[SKIP ORDER] Trade too small: ${(userExposurePct*100).toFixed(6)}% < ${(MIN_EXPOSURE_PCT*100)}% threshold`);
+    await updateActivity();
+    return;
+  }
+  
+  if (tradeUSDC < MIN_TRADE_SIZE_USD) {
+    console.log(`[SKIP ORDER] Trade value too low: $${tradeUSDC.toFixed(6)} < $${MIN_TRADE_SIZE_USD} threshold`);
+    await updateActivity();
+    return;
+  }
 
+  console.log(`✅ HIGH CONVICTION TRADE: ${(userExposurePct*100).toFixed(6)}% exposure, $${tradeUSDC.toFixed(6)} value`);
+
+  // ... rest of your existing buy logic
     const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
     const targetExposureValue = userExposurePct * (myPortfolio * 33);
 
