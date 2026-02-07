@@ -332,7 +332,7 @@ const tradeUSDC = trade.usdcSize ?? 0;
             }
 const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
 // ====================================✅ NEW: Filter by exposure threshold==================================
-const MIN_TRADE_SIZE_USD = 88; // Only mirror trades >= $88
+const MIN_TRADE_SIZE_USD = 0; // Only mirror trades >= ALL
     if (tradeUSDC < MIN_TRADE_SIZE_USD) {
     console.log(`[SKIP ORDER] Trade value too low: $${tradeUSDC.toFixed(6)} < $${MIN_TRADE_SIZE_USD} threshold`);
     await updateActivity();
