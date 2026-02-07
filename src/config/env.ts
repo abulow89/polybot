@@ -42,6 +42,5 @@ export const ENV = {
     RPC_URL1: process.env.RPC_URL1 as string,
     RPC_URL2: process.env.RPC_URL2 as string,
     USDC_CONTRACT_ADDRESS: process.env.USDC_CONTRACT_ADDRESS as string,
-    MIN_EXPOSURE_PCT: parseFloat(process.env.MIN_EXPOSURE_PCT || '0.05'),
     MIN_TRADE_SIZE_USD: parseFloat(process.env.MIN_TRADE_SIZE_USD || '3000'),
 };
