@@ -330,6 +330,7 @@ while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
 }
 
 await updateActivity();
+}
 // ======================================================= BUY ===================================
   else if (condition === 'buy') {
     console.log('Buy Strategy...');
