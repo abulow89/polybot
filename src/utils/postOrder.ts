@@ -148,10 +148,22 @@ const orderArgs = {
 const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
     if (!signedOrder) return 0;
 const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
-    if (!resp.success) {
-      console.log('Error posting order:', resp.error ?? resp);
-      return 0;
-    }
+if (!resp.success) {
+  const errorMsg = resp.error || 'Unknown error';
+  
+  // ✅ Only log balance errors once, skip the noise
+  if (errorMsg.includes('not enough balance')) {
+    console.log('[ORDER FAILED] Insufficient balance/allowance');
+  } else if (errorMsg.includes('nonce')) {
+    console.log('[ORDER FAILED] Nonce issue');
+  } else if (errorMsg.includes('price')) {
+    console.log('[ORDER FAILED] Price out of range');
+  } else {
+    console.log(`[ORDER FAILED] ${errorMsg}`);
+  }
+  
+  return 0;
+}
     updateDynamicExposure(tokenId, takerAmount, side);
     return takerAmount;
 };
