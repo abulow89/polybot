@@ -298,6 +298,11 @@ let remaining = my_position.size;
         }
 
     let retry = 0;
+      if (remaining > my_position.size) {
+  console.log(`[SKIP SELL] Not enough shares. Have: ${my_position.size}, Need: ${remaining}`);
+  await updateActivity();
+  return;
+}
     while (remaining > 0 && retry < RETRY_LIMIT) {
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
 
