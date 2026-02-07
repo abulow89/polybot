@@ -258,7 +258,7 @@ try {
   // Use getBalanceAllowance instead of getBalance
   const bal = await safeCall(() =>
     clobClient.getBalanceAllowance({
-      asset_type: AssetType.CONDITIONAL,
+      asset_type: AssetType."CONDITIONAL",
       token_id: tokenId,
     })
   );
