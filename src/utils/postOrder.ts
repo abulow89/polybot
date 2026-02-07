@@ -255,20 +255,22 @@ const takerMultiplier = 1 + takerFeeBps / 10000;
 let availableShares = 0;
 
 try {
-  // Fetch all balances for the user's wallet
-  const balances = await safeCall(() => clobClient.getUserBalances(USER_ADDRESS));
+  // Use getBalanceAllowance instead of getBalance
+  const bal = await safeCall(() =>
+    clobClient.getBalanceAllowance({
+      asset_type: 'CONDITIONAL', // or 'COLLATERAL' depending on token type
+      token_id: tokenId,
+    })
+  );
 
-  // Find the balance for the token we want to sell
-  const tokenBalance = balances.find((b: any) => b.tokenID === tokenId);
-
-  availableShares = formatTakerAmount(parseFloat(tokenBalance?.size ?? '0'));
+  // Parse the returned balance string
+  availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
 } catch (err) {
   console.warn('[SELL] Failed to fetch token balance', err);
   await updateActivity();
   return;
 }
 
-// Skip if we have no shares
 if (availableShares <= 0) {
   console.log('[SKIP SELL] No available shares in wallet');
   await updateActivity();
