@@ -252,85 +252,95 @@ const takerMultiplier = 1 + takerFeeBps / 10000;
     
       console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
 // ======== ========================================SELL / MERGE =====================================
-   let availableShares = 0;
+  // ======================== SELL =========================================
+  if (condition === 'sell') {
+    if (!my_position) {
+      console.log('No position to sell');
+      await updateActivity();
+      return;
+    }
 
-try {
-  const bal = await safeCall(() => clobClient.getBalance(tokenId));
-  availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
-} catch {
-  console.warn('[SELL] Failed to fetch token balance');
-  await updateActivity();
-  return;
-}
+    let remaining = my_position.size;
 
-if (availableShares <= 0) {
-  console.log('[SKIP SELL] No available shares in wallet');
-  await updateActivity();
-  return;
-}
+    // Fetch available balance
+    let availableShares = 0;
+    try {
+      const bal = await safeCall(() => clobClient.getBalance(tokenId));
+      availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
+    } catch {
+      console.warn('[SELL] Failed to fetch token balance');
+      await updateActivity();
+      return;
+    }
 
-let retry = 0;
+    if (availableShares <= 0) {
+      console.log('[SKIP SELL] No available shares in wallet');
+      await updateActivity();
+      return;
+    }
 
-while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
-  if (retry >= FAST_ATTEMPTS)
-    await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
+    let retry = 0;
+    while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
+      if (retry >= FAST_ATTEMPTS)
+        await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
 
-  let orderBook;
-  try {
-    orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-  } catch (err: any) {
-    if (err.response?.status === 404) break;
-    throw err;
-  }
+      let orderBook;
+      try {
+        orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+      } catch (err: any) {
+        if (err.response?.status === 404) break;
+        throw err;
+      }
 
-  if (!orderBook?.bids?.length) break;
+      if (!orderBook?.bids?.length) break;
 
-  const validBids = orderBook.bids.filter(b =>
-    !isNaN(parseFloat(b.price)) &&
-    !isNaN(parseFloat(b.size))
-  );
+      const validBids = orderBook.bids.filter(
+        b => !isNaN(parseFloat(b.price)) && !isNaN(parseFloat(b.size))
+      );
 
-  if (!validBids.length) break;
+      if (!validBids.length) break;
 
-  const maxPriceBid = validBids.reduce((max, cur) =>
-    parseFloat(cur.price) > parseFloat(max.price) ? cur : max
-  );
+      const maxPriceBid = validBids.reduce(
+        (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max
+      );
 
-  const sellSizeRaw = Math.min(
-    remaining,
-    parseFloat(maxPriceBid.size),
-    availableShares
-  );
+      // Clamp sell size
+      const sellSizeRaw = Math.min(
+        remaining,
+        parseFloat(maxPriceBid.size),
+        availableShares
+      );
 
-  const sellSize = formatTakerAmount(sellSizeRaw);
+      const sellSize = formatTakerAmount(sellSizeRaw);
 
-  if (sellSize <= 0) break;
+      if (sellSize <= 0) break;
 
-  const filled = await executeSmartOrder(
-  clobClient,
-  side,
-  tokenId,
-  shares,        
-  bestPrice,
-  makerFeeBps,
-  takerFeeBps,
-  marketMinSafe,
-  availableBalance
-);
+      // Execute sell
+      const filled = await executeSmartOrder(
+        clobClient,
+        Side.SELL,
+        tokenId,
+        sellSize,
+        parseFloat(maxPriceBid.price),
+        makerFeeBps,
+        takerFeeBps,
+        marketMinSafe,
+        my_balance
+      );
 
-  if (!filled) {
-    retry++;
-  } else {
-    remaining -= filled;
-    availableShares -= filled;
-    retry = 0;
-  }
+      if (!filled) {
+        retry++;
+      } else {
+        remaining -= filled;
+        availableShares -= filled;
+        retry = 0;
+      }
 
-  if (retry >= FAST_ATTEMPTS)
-    await sleepWithJitter(RETRY_DELAY);
-}
+      if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+    }
 
-await updateActivity();
+    await updateActivity();
+  } 
 
 // ======================================================= BUY ===================================
   else if (condition === 'buy') {
