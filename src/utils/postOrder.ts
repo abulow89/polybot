@@ -431,6 +431,12 @@ let estShares = Math.min(
   askPriceRaw,
   1 + takerFeeBps / 10000  // 🔹 MODIFIED: pass dynamic fee multiplier
 );
+        // ✅ ADD THIS CHECK
+const estimatedCost = estShares * askPriceRaw * (1 + takerFeeBps / 10000);
+if (estimatedCost > remainingUSDC) {
+  console.log('[SKIP ORDER] Insufficient funds for order');
+  break;
+}
       const rawCost = estShares * askPriceRaw;
 
 // Force cost to 2 decimals FIRST
