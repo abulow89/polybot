@@ -433,9 +433,10 @@ let estShares = Math.min(
   1 + takerFeeBps / 10000
 );
 
-// ✅ SIMPLE CHECK - if enforceMinOrder returned 0, we're done
-if (estShares === 0) {
-  console.log('[SKIP ORDER] Insufficient funds for minimum order');
+        // ✅ ADD THIS CHECK
+const estimatedCost = estShares * askPriceRaw * (1 + takerFeeBps / 10000);
+if (estimatedCost > remainingUSDC) {
+  console.log('[SKIP ORDER] Insufficient funds for order');
   break;
 }
       const rawCost = estShares * askPriceRaw;
