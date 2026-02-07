@@ -204,7 +204,7 @@ const makerFilled = await postSingleOrder(
    bestPrice,
    takerFeeBps,            // 🔹 MODIFIED: pass takerFeeBps dynamically
    marketMinSafe,
-   OrderType.FAK,
+   'FAK' as OrderType,
    availableBalance
  );
 };
