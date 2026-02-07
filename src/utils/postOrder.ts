@@ -8,10 +8,7 @@ const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
 //  amount rounding — round down to 4 decimals (max accuracy for API)
 const formatTakerAmount = (a: number) => Math.floor(a * 100000) / 100000; // 4 decimals max
-const formatMakerAmount = (a: number) => {
-  const rounded = Math.floor(a * 100) / 100;
-  return parseFloat(rounded.toFixed(2)); // ✅ Ensures 2 decimals always
-};
+const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100;
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
@@ -122,6 +119,8 @@ const feeMultiplier = 1 + feeRateBps / 10000;
 // =========================== Adjust size sent to CLOB to account for fees ==============================
 const sizeWithFee = formatTakerAmount(takerAmount * feeMultiplier); // 🔹 NEW
 const makerAmountFloat = takerAmount * price;
+// ✅ Round to 2 decimals FIRST
+const makerAmount = Math.floor(makerAmountFloat * 100) / 100;
 const makerAmount = formatMakerAmount(makerAmountFloat);
 const totalCost = makerAmount * feeMultiplier;
 
