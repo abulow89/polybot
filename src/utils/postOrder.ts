@@ -371,7 +371,8 @@ const filled = await executeSmartOrder(
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(6)}%`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(6)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(6)}`);
-    let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
+    
+      let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
     remainingUSDC = Math.min(remainingUSDC, my_balance);
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
     let retry = 0;
@@ -424,17 +425,17 @@ let estShares = Math.min(
   remainingUSDC / (askPriceRaw * (1 + takerFeeBps / 10000)),  // 🔹 MODIFIED: dynamic fee
   askSize
 );
-        estShares = enforceMinOrder(
+       estShares = enforceMinOrder(
   estShares,
   marketMinSafe,
   remainingUSDC,
   askPriceRaw,
-  1 + takerFeeBps / 10000  // 🔹 MODIFIED: pass dynamic fee multiplier
+  1 + takerFeeBps / 10000
 );
-        // ✅ ADD THIS CHECK
-const estimatedCost = estShares * askPriceRaw * (1 + takerFeeBps / 10000);
-if (estimatedCost > remainingUSDC) {
-  console.log('[SKIP ORDER] Insufficient funds for order');
+
+// ✅ SIMPLE CHECK - if enforceMinOrder returned 0, we're done
+if (estShares === 0) {
+  console.log('[SKIP ORDER] Insufficient funds for minimum order');
   break;
 }
       const rawCost = estShares * askPriceRaw;
