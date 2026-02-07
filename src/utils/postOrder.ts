@@ -101,7 +101,7 @@ const enforceMinOrder = (
   if (estShares >= marketMinSafe) return estShares;
 
   const minCost = marketMinSafe * price * feeMultiplier;
-  if (availableBalance < minCost) {
+  if (remainingUSDC < minCost) {
     console.log(`[SKIP ORDER] Not enough USDC for minimum order. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
     return 0;
   }
