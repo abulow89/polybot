@@ -251,31 +251,6 @@ const marketMinSafe = marketMinSize; // always use numeric safe min for enforceM
 const takerMultiplier = 1 + takerFeeBps / 10000;
     
       console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
-    // ======== Fetch available shares safely from CLOB ========
-let availableShares = 0;
-
-try {
-  // Use getBalanceAllowance instead of getBalance
-  const bal = await safeCall(() =>
-    clobClient.getBalanceAllowance({
-      asset_type: AssetType.CONDITIONAL, // or "COLLATERAL" depending on token type
-      token_id: tokenId,
-    })
-  );
-
-  // Parse the returned balance string
-  availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
-} catch (err) {
-  console.warn('[SELL] Failed to fetch token balance', err);
-  await updateActivity();
-  return;
-}
-
-if (availableShares <= 0) {
-  console.log('[SKIP SELL] No available shares in wallet');
-  await updateActivity();
-  return;
-}
 // ======== ========================================SELL / MERGE =====================================
     if (condition === 'merge' || condition === 'sell') {
       console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
@@ -297,73 +272,79 @@ const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
     remaining *= ratio;
   }
  //======================= ✅ THEN check if we have enough shares (moved AFTER calculation)=================
-  if (remaining > my_position.size) {
-    console.log(`[SKIP SELL] Not enough shares. Have: ${my_position.size}, Need: ${remaining}`);
-    await updateActivity();
-    return;
-  }
- let retry = 0;
+  let retry = 0;
+  while (remaining > 0 && retry < RETRY_LIMIT) {
+    if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
+    let orderBook;
+    try {
+      orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+    } catch (err: any) {
+      if (err.response?.status === 404) break;
+      throw err;
+    }
+    if (!orderBook || !Array.isArray(orderBook.bids) || orderBook.bids.length === 0) {
+      console.warn(`[SKIP ORDER] Empty bid side for token ${tokenId}`);
+      break;
+    }
+const validBids = orderBook.bids.filter(b =>
+      !isNaN(parseFloat(b.price)) && !isNaN(parseFloat(b.size))
+    );
+    if (validBids.length === 0) {
+      console.warn('[SKIP ORDER] No valid bids');
+      break;
+    }
+const maxPriceBid = validBids.reduce(
+      (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
+      orderBook.bids[0]
+    );
+let availableShares = 0;
 
-while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
-  if (retry >= FAST_ATTEMPTS)
-    await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
-
-  let orderBook;
-  try {
-    orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-  } catch (err: any) {
-    if (err.response?.status === 404) break;
-    throw err;
-  }
-
-  if (!orderBook?.bids?.length) break;
-
-  const validBids = orderBook.bids.filter(b =>
-    !isNaN(parseFloat(b.price)) &&
-    !isNaN(parseFloat(b.size))
-  );
-
-  if (!validBids.length) break;
-
-  const maxPriceBid = validBids.reduce((max, cur) =>
-    parseFloat(cur.price) > parseFloat(max.price) ? cur : max
-  );
-
-  const sellSizeRaw = Math.min(
-    remaining,
-    parseFloat(maxPriceBid.size),
-    availableShares
-  );
-
-  const sellSize = formatTakerAmount(sellSizeRaw);
-
-  if (sellSize <= 0) break;
-
-  const filled = await executeSmartOrder(
-    clobClient,
-    Side.SELL,
-    tokenId,
-    sellSize,
-    parseFloat(maxPriceBid.price),
-    makerFeeBps,
-    takerFeeBps,
-    marketMinSafe,
-    my_balance
-  );
-
-  if (!filled) {
-    retry++;
-  } else {
-    remaining -= filled;
-    availableShares -= filled;
-    retry = 0;
-  }
-
-  if (retry >= FAST_ATTEMPTS)
-    await sleepWithJitter(RETRY_DELAY);
+try {
+  const bal = await safeCall(() => clobClient.getBalance(tokenId));
+  availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
+} catch {
+  console.warn('[SELL] Failed to fetch token balance');
+  break;
 }
 
-await updateActivity();
+if (availableShares <= 0) {
+  console.log('[SKIP SELL] No available shares in wallet');
+  break;
+}
+
+// Clamp sell size to:
+const sellSizeRaw = Math.min(
+  remaining,
+  parseFloat(maxPriceBid.size),
+  availableShares
+);
+
+const sellSize = formatTakerAmount(sellSizeRaw);
+
+if (sellSize <= 0) {
+  console.log('[SKIP SELL] sellSize <= 0 after clamp');
+  break;
+}
+
+const filled = await executeSmartOrder(
+  clobClient,
+  Side.SELL,
+  tokenId,
+  sellSize,
+  parseFloat(maxPriceBid.price),
+  makerFeeBps,
+  takerFeeBps,
+  marketMinSafe,
+  my_balance
+);
+    if (!filled) retry++;
+    else {
+      remaining -= filled;
+      retry = 0;
+    }
+    if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+  }
+  await updateActivity();
 }
 // ======================================================= BUY ===================================
   else if (condition === 'buy') {
