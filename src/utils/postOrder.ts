@@ -251,6 +251,29 @@ const marketMinSafe = marketMinSize; // always use numeric safe min for enforceM
 const takerMultiplier = 1 + takerFeeBps / 10000;
     
       console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
+    // ======== Fetch available shares safely from CLOB ========
+let availableShares = 0;
+
+try {
+  // Fetch all balances for the user's wallet
+  const balances = await safeCall(() => clobClient.getUserBalances(USER_ADDRESS));
+
+  // Find the balance for the token we want to sell
+  const tokenBalance = balances.find((b: any) => b.tokenID === tokenId);
+
+  availableShares = formatTakerAmount(parseFloat(tokenBalance?.size ?? '0'));
+} catch (err) {
+  console.warn('[SELL] Failed to fetch token balance', err);
+  await updateActivity();
+  return;
+}
+
+// Skip if we have no shares
+if (availableShares <= 0) {
+  console.log('[SKIP SELL] No available shares in wallet');
+  await updateActivity();
+  return;
+}
 // ======== ========================================SELL / MERGE =====================================
     if (condition === 'merge' || condition === 'sell') {
       console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
@@ -277,50 +300,68 @@ const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
     await updateActivity();
     return;
   }
-  let retry = 0;
-  while (remaining > 0 && retry < RETRY_LIMIT) {
-    if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
-    let orderBook;
-    try {
-      orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-    } catch (err: any) {
-      if (err.response?.status === 404) break;
-      throw err;
-    }
-    if (!orderBook || !Array.isArray(orderBook.bids) || orderBook.bids.length === 0) {
-      console.warn(`[SKIP ORDER] Empty bid side for token ${tokenId}`);
-      break;
-    }
-const validBids = orderBook.bids.filter(b =>
-      !isNaN(parseFloat(b.price)) && !isNaN(parseFloat(b.size))
-    );
-    if (validBids.length === 0) {
-      console.warn('[SKIP ORDER] No valid bids');
-      break;
-    }
-const maxPriceBid = validBids.reduce(
-      (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
-      orderBook.bids[0]
-    );
-const filled = await executeSmartOrder(
-      clobClient,
-      Side.SELL,
-      tokenId,
-      Math.min(remaining, parseFloat(maxPriceBid.size)),
-      parseFloat(maxPriceBid.price),
-      makerFeeBps,
-      takerFeeBps,
-      marketMinSafe,
-      my_balance
-    );
-    if (!filled) retry++;
-    else {
-      remaining -= filled;
-      retry = 0;
-    }
-    if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+ let retry = 0;
+
+while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
+  if (retry >= FAST_ATTEMPTS)
+    await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
+
+  let orderBook;
+  try {
+    orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+  } catch (err: any) {
+    if (err.response?.status === 404) break;
+    throw err;
   }
-  await updateActivity();
+
+  if (!orderBook?.bids?.length) break;
+
+  const validBids = orderBook.bids.filter(b =>
+    !isNaN(parseFloat(b.price)) &&
+    !isNaN(parseFloat(b.size))
+  );
+
+  if (!validBids.length) break;
+
+  const maxPriceBid = validBids.reduce((max, cur) =>
+    parseFloat(cur.price) > parseFloat(max.price) ? cur : max
+  );
+
+  const sellSizeRaw = Math.min(
+    remaining,
+    parseFloat(maxPriceBid.size),
+    availableShares
+  );
+
+  const sellSize = formatTakerAmount(sellSizeRaw);
+
+  if (sellSize <= 0) break;
+
+  const filled = await executeSmartOrder(
+    clobClient,
+    Side.SELL,
+    tokenId,
+    sellSize,
+    parseFloat(maxPriceBid.price),
+    makerFeeBps,
+    takerFeeBps,
+    marketMinSafe,
+    my_balance
+  );
+
+  if (!filled) {
+    retry++;
+  } else {
+    remaining -= filled;
+    availableShares -= filled;
+    retry = 0;
+  }
+
+  if (retry >= FAST_ATTEMPTS)
+    await sleepWithJitter(RETRY_DELAY);
+}
+
+await updateActivity();
 }
 // ======================================================= BUY ===================================
   else if (condition === 'buy') {
