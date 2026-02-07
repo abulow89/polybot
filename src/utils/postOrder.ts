@@ -119,8 +119,7 @@ const feeMultiplier = 1 + feeRateBps / 10000;
 // =========================== Adjust size sent to CLOB to account for fees ==============================
 const sizeWithFee = formatTakerAmount(takerAmount * feeMultiplier); // 🔹 NEW
 const makerAmountFloat = takerAmount * price;
-// ✅ FIX: Round to exactly 2 decimals as a NUMBER, not just format for display
-const makerAmount = Math.floor(makerAmountFloat * 100) / 100;
+const makerAmount = Math.round(makerAmountFloat * 100) / 100; // ✅ ROUND, not floor
 
 const totalCost = makerAmount * feeMultiplier;
 
@@ -410,8 +409,8 @@ const rawCost = estShares * askPriceRaw;
 // Force cost to 2 decimals FIRST
 const costRounded = Math.floor(rawCost * 100) / 100; // 2 decimals
 // Recalculate shares from rounded cost
-const sharesToBuy = formatTakerAmount(costRounded / askPriceRaw); // 4 decimals
-// 🔹 NEW: calculate actual order size including fee for logging
+const sharesToBuy = formatTakerAmount(estShares);
+const makerAmountForOrder = Math.floor(sharesToBuy * askPriceRaw * 100) / 100;
 const feeMultiplier = 1 + takerFeeBps / 10000;
 const sizeWithFee = formatTakerAmount(sharesToBuy * feeMultiplier);
         console.log(`[BUY] Attempting to buy ${sharesToBuy} shares (sizeWithFee sent: ${sizeWithFee}) at $${askPriceRaw.toFixed(4)}`);
