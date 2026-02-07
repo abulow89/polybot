@@ -272,11 +272,6 @@ const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
     remaining *= ratio;
   }
  //======================= ✅ THEN check if we have enough shares (moved AFTER calculation)=================
-  if (remaining > my_position.size) {
-    console.log(`[SKIP SELL] Not enough shares. Have: ${my_position.size}, Need: ${remaining}`);
-    await updateActivity();
-    return;
-  }
   let retry = 0;
   while (remaining > 0 && retry < RETRY_LIMIT) {
     if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
@@ -302,17 +297,46 @@ const maxPriceBid = validBids.reduce(
       (max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max,
       orderBook.bids[0]
     );
+let availableShares = 0;
+
+try {
+  const bal = await safeCall(() => clobClient.getBalance(tokenId));
+  availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
+} catch {
+  console.warn('[SELL] Failed to fetch token balance');
+  break;
+}
+
+if (availableShares <= 0) {
+  console.log('[SKIP SELL] No available shares in wallet');
+  break;
+}
+
+// Clamp sell size to:
+const sellSizeRaw = Math.min(
+  remaining,
+  parseFloat(maxPriceBid.size),
+  availableShares
+);
+
+const sellSize = formatTakerAmount(sellSizeRaw);
+
+if (sellSize <= 0) {
+  console.log('[SKIP SELL] sellSize <= 0 after clamp');
+  break;
+}
+
 const filled = await executeSmartOrder(
-      clobClient,
-      Side.SELL,
-      tokenId,
-      Math.min(remaining, parseFloat(maxPriceBid.size)),
-      parseFloat(maxPriceBid.price),
-      makerFeeBps,
-      takerFeeBps,
-      marketMinSafe,
-      my_balance
-    );
+  clobClient,
+  Side.SELL,
+  tokenId,
+  sellSize,
+  parseFloat(maxPriceBid.price),
+  makerFeeBps,
+  takerFeeBps,
+  marketMinSafe,
+  my_balance
+);
     if (!filled) retry++;
     else {
       remaining -= filled;
