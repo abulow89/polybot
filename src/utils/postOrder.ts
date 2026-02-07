@@ -374,7 +374,7 @@ const takerMultiplier = 1 + takerFeeBps / 10000;
             }
     const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
 // ✅ NEW: Filter by exposure threshold
-    const MIN_TRADE_SIZE_USD = 111; // Only mirror trades >= $300
+    const MIN_TRADE_SIZE_USD = 111; // Only mirror trades >= $111
   
     if (tradeUSDC < MIN_TRADE_SIZE_USD) {
     console.log(`[SKIP ORDER] Trade value too low: $${tradeUSDC.toFixed(6)} < $${MIN_TRADE_SIZE_USD} threshold`);
