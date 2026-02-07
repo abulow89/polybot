@@ -7,7 +7,7 @@ import { ENV } from '../config/env';
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
 //  amount rounding — round down to 4 decimals (max accuracy for API)
-const formatTakerAmount = (a: number) => Math.floor(a * 10000) / 10000; // 4 decimals max
+const formatTakerAmount = (a: number) => Math.floor(a * 100000) / 100000; // 4 decimals max
 const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100;
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
@@ -130,9 +130,9 @@ const totalCost = makerAmount * feeMultiplier;
 const orderArgs = {
       side,
       tokenID: tokenId,
-      size: sizeWithFee.toFixed(4),       // 🔹 MODIFIED to include fee
+      size: sizeWithFee.toFixed(5),       // 🔹 MODIFIED to include fee
       price: price.toFixed(2),
-          makerAmount: makerAmount.toFixed(2), // 2 decimals
+      makerAmount: makerAmount.toFixed(2), // 2 decimals
         feeRateBps
     };
     console.log('===== ORDER DEBUG =====');
