@@ -8,7 +8,10 @@ const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
 //  amount rounding — round down to 4 decimals (max accuracy for API)
 const formatTakerAmount = (a: number) => Math.floor(a * 100000) / 100000; // 4 decimals max
-const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100;
+const formatMakerAmount = (a: number) => {
+  const rounded = Math.floor(a * 100) / 100;
+  return parseFloat(rounded.toFixed(2)); // ✅ Ensures 2 decimals always
+};
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
@@ -135,15 +138,15 @@ const orderArgs = {
       makerAmount: makerAmount.toFixed(2), // 2 decimals
         feeRateBps
     };
-    console.log('===== ORDER DEBUG =====');
-    console.log({
-      price,
-      takerAmount,
-      sizeWithFee,                       // 🔹 NEW
-      makerAmountFloat,
-      makerAmount,
-      orderArgs,
-    });
+console.log('===== ORDER DEBUG =====');
+console.log({
+  price: price.toFixed(2),           // ✅ Format for display
+  takerAmount: takerAmount.toFixed(5), // ✅ Format for display
+  sizeWithFee: sizeWithFee.toFixed(5), // ✅ Format for display
+  makerAmountFloat,
+  makerAmount: makerAmount.toFixed(2), // ✅ Format for display
+  orderArgs,
+});
 const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
     if (!signedOrder) return 0;
 const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
