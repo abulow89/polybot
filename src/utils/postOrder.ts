@@ -3,6 +3,16 @@ import { UserActivityInterface, UserPositionInterface } from '../interfaces/User
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
 
+// ✅  Suppress verbose CLOB client error logging
+const originalError = console.error;
+console.error = (...args: any[]) => {
+  // Filter out CLOB Client verbose JSON dumps
+  const msg = args[0];
+  if (typeof msg === 'string' && msg.includes('[CLOB Client]')) {
+    return; // Silently skip
+  }
+  originalError(...args);
+};
 // ===== EXCHANGE FORMAT HELPERS =============================================================================
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
