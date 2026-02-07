@@ -341,9 +341,9 @@ const MIN_TRADE_SIZE_USD = 0; // Only mirror trades >= ALL
   console.log(`✅ HIGH CONVICTION TRADE: ${(userExposurePct*100).toFixed(6)}% exposure, $${tradeUSDC.toFixed(6)} value`);
 // ==================================... rest of your existing buy logic=========================================
 const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
-const targetExposureValue = userExposurePct * (myPortfolio * 33);
+const targetExposureValue = userExposurePct * (myPortfolio * 11);
 const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
-    console.log(`[BUY] Mirroring user exposure (relative to balance x33):`);
+    console.log(`[BUY] Mirroring user exposure (relative to balance x11):`);
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(6)}%`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(6)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(6)}`);
