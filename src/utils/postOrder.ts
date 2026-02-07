@@ -80,7 +80,6 @@ const newExposure =
     `[Exposure] ${Side[side]} ${filled} | Token ${tokenId} → ${newExposure} shares`
   );
 };
-  console.log(OrderType);
 // ===================🔥 Enforce min-order size safely with feeMultiplier==============================
 const enforceMinOrder = (
       estShares: number,
@@ -249,7 +248,6 @@ const marketMinSize = market?.minimum_order_size
   : 1;
 const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
 const takerMultiplier = 1 + takerFeeBps / 10000;
-     console.log('Market info:', market);
       console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
 // ======== ========================================SELL / MERGE =====================================
     if (condition === 'merge' || condition === 'sell') {
