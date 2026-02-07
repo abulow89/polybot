@@ -80,7 +80,6 @@ const newExposure =
     `[Exposure] ${Side[side]} ${filled} | Token ${tokenId} → ${newExposure} shares`
   );
 };
-    console.log(OrderType);
 // ===================🔥 Enforce min-order size safely with feeMultiplier==============================
 const enforceMinOrder = (
       estShares: number,
@@ -148,10 +147,22 @@ const orderArgs = {
 const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
     if (!signedOrder) return 0;
 const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
-    if (!resp.success) {
-      console.log('Error posting order:', resp.error ?? resp);
-      return 0;
-    }
+if (!resp.success) {
+  const errorMsg = resp.error || 'Unknown error';
+  
+  // ✅ Only log balance errors once, skip the noise
+  if (errorMsg.includes('not enough balance')) {
+    console.log('[ORDER FAILED] Insufficient balance/allowance');
+  } else if (errorMsg.includes('nonce')) {
+    console.log('[ORDER FAILED] Nonce issue');
+  } else if (errorMsg.includes('price')) {
+    console.log('[ORDER FAILED] Price out of range');
+  } else {
+    console.log(`[ORDER FAILED] ${errorMsg}`);
+  }
+  
+  return 0;
+}
     updateDynamicExposure(tokenId, takerAmount, side);
     return takerAmount;
 };
@@ -237,7 +248,7 @@ const marketMinSize = market?.minimum_order_size
   : 1;
 const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
 const takerMultiplier = 1 + takerFeeBps / 10000;
-      console.log('Market info:', market);
+    
       console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
 // ======== ========================================SELL / MERGE =====================================
     if (condition === 'merge' || condition === 'sell') {
@@ -321,7 +332,7 @@ const tradeUSDC = trade.usdcSize ?? 0;
             }
 const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
 // ====================================✅ NEW: Filter by exposure threshold==================================
-const MIN_TRADE_SIZE_USD = 111; // Only mirror trades >= $111
+const MIN_TRADE_SIZE_USD = 88; // Only mirror trades >= $88
     if (tradeUSDC < MIN_TRADE_SIZE_USD) {
     console.log(`[SKIP ORDER] Trade value too low: $${tradeUSDC.toFixed(6)} < $${MIN_TRADE_SIZE_USD} threshold`);
     await updateActivity();
