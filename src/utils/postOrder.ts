@@ -3,16 +3,6 @@ import { UserActivityInterface, UserPositionInterface } from '../interfaces/User
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
 
-// ✅  Suppress verbose CLOB client error logging
-const originalError = console.error;
-console.error = (...args: any[]) => {
-  // Filter out CLOB Client verbose JSON dumps
-  const msg = args[0];
-  if (typeof msg === 'string' && msg.includes('[CLOB Client]')) {
-    return; // Silently skip
-  }
-  originalError(...args);
-};
 // ===== EXCHANGE FORMAT HELPERS =============================================================================
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
 const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
@@ -90,6 +80,7 @@ const newExposure =
     `[Exposure] ${Side[side]} ${filled} | Token ${tokenId} → ${newExposure} shares`
   );
 };
+    console.log(OrderType);
 // ===================🔥 Enforce min-order size safely with feeMultiplier==============================
 const enforceMinOrder = (
       estShares: number,
@@ -157,22 +148,10 @@ const orderArgs = {
 const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
     if (!signedOrder) return 0;
 const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
-if (!resp.success) {
-  const errorMsg = resp.error || 'Unknown error';
-  
-  // ✅ Only log balance errors once, skip the noise
-  if (errorMsg.includes('not enough balance')) {
-    console.log('[ORDER FAILED] Insufficient balance/allowance');
-  } else if (errorMsg.includes('nonce')) {
-    console.log('[ORDER FAILED] Nonce issue');
-  } else if (errorMsg.includes('price')) {
-    console.log('[ORDER FAILED] Price out of range');
-  } else {
-    console.log(`[ORDER FAILED] ${errorMsg}`);
-  }
-  
-  return 0;
-}
+    if (!resp.success) {
+      console.log('Error posting order:', resp.error ?? resp);
+      return 0;
+    }
     updateDynamicExposure(tokenId, takerAmount, side);
     return takerAmount;
 };
@@ -258,6 +237,7 @@ const marketMinSize = market?.minimum_order_size
   : 1;
 const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
 const takerMultiplier = 1 + takerFeeBps / 10000;
+      console.log('Market info:', market);
       console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
 // ======== ========================================SELL / MERGE =====================================
     if (condition === 'merge' || condition === 'sell') {
