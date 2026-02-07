@@ -119,7 +119,9 @@ const feeMultiplier = 1 + feeRateBps / 10000;
 // =========================== Adjust size sent to CLOB to account for fees ==============================
 const sizeWithFee = formatTakerAmount(takerAmount * feeMultiplier); // 🔹 NEW
 const makerAmountFloat = takerAmount * price;
-const makerAmount = formatMakerAmount(makerAmountFloat);
+// ✅ FIX: Round to exactly 2 decimals as a NUMBER, not just format for display
+const makerAmount = Math.floor(makerAmountFloat * 100) / 100;
+
 const totalCost = makerAmount * feeMultiplier;
 
     if (availableBalance !== undefined && totalCost > availableBalance) {
