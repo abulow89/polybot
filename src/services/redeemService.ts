@@ -49,27 +49,42 @@ export class RedeemService {
    * Check for resolved markets and redeem them
    */
   private async checkAndRedeem() {
-    try {
-      console.log('[REDEEM SERVICE] Checking for resolved markets...');
+  try {
+    console.log('[REDEEM SERVICE] Checking for resolved markets...');
 
-      // Get all unique condition IDs from your trade history
-      const trades = await UserActivity.find({ bot: true }).distinct('conditionId');
-      
-      if (!trades || trades.length === 0) {
-        console.log('[REDEEM SERVICE] No markets to check');
-        return;
-      }
-
-      console.log(`[REDEEM SERVICE] Found ${trades.length} markets to check`);
-
-      // Attempt to redeem all markets
-      await redeemAllResolvedMarkets(trades);
-
-      console.log('[REDEEM SERVICE] Check complete');
-    } catch (err) {
-      console.error('[REDEEM SERVICE ERROR]', err);
+    // Get unredeemed markets from database
+    const markets = await MarketToRedeem.find({ redeemed: false });
+    
+    if (!markets || markets.length === 0) {
+      console.log('[REDEEM SERVICE] No markets to redeem');
+      return;
     }
+
+    const conditionIds = markets.map(m => m.conditionId);
+    console.log(`[REDEEM SERVICE] Checking ${conditionIds.length} markets`);
+
+    for (const market of markets) {
+      try {
+        await redeemPositions(market.conditionId, signer);
+        
+        // Mark as redeemed
+        await MarketToRedeem.updateOne(
+          { _id: market._id },
+          { redeemed: true, redeemedAt: new Date() }
+        );
+        
+        console.log(`✅ Redeemed: ${market.conditionId}`);
+      } catch (err: any) {
+        if (!err.message.includes('no payout')) {
+          console.error(`❌ Redeem failed: ${market.conditionId}`, err.message);
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error('[REDEEM SERVICE ERROR]', err);
   }
+}
 }
 
 // Export singleton instance
