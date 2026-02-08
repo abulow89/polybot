@@ -383,7 +383,6 @@ const postOrder = async (
       await updateActivity();
   } else {
     console.log('Condition not supported');
-  }
-};
+  };
 
 export default postOrder;
