@@ -370,9 +370,11 @@ const postOrder = async (
         console.log(`  Exposure value: $${(dynamicExposure[tokenId]*askPriceRaw).toFixed(6)}`);
         console.log(`Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`);
       }
+      
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
     }
   }
+  
         // 🔹 NEW: Track this market for future redemption
   await MarketToRedeem.findOneAndUpdate(
     { conditionId: marketId },
@@ -381,7 +383,8 @@ const postOrder = async (
   );
     
       await updateActivity();
-  } else {
+}
+   else {
     console.log('Condition not supported');
   };
 
