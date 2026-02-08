@@ -5,9 +5,8 @@ import { ENV } from '../config/env';
 
 // ===== EXCHANGE FORMAT HELPERS =============================================================================
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
-const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100; // 2 decimals max
-//  amount rounding — round down to 4 decimals (max accuracy for API)
-const formatTakerAmount = (a: number) => Math.floor(a * 100000) / 100000; // 4 decimals max
+const formatPriceForOrder = (p: number) => Math.round(clampPrice(p) * 100) / 100;
+const formatTakerAmount = (a: number) => Math.floor(a * 100000) / 100000;
 const formatMakerAmount = (a: number) => Math.floor(a * 100) / 100;
 
 const RETRY_LIMIT = ENV.RETRY_LIMIT;
@@ -21,476 +20,359 @@ const ORDERBOOK_DELAY = 350;
 const RETRY_DELAY = 1200;
 
 const sleepWithJitter = async (ms: number) => {
-const jitter = ms * 0.1 * (Math.random() - 0.5);
-    await sleep(ms + jitter);
+  const jitter = ms * 0.1 * (Math.random() - 0.5);
+  await sleep(ms + jitter);
 };
+
 const adaptiveDelay = (baseDelay: number, scale: number) => {
-    const factor = Math.min(2, Math.max(0.5, scale / 100));
-    return baseDelay * factor;
+  const factor = Math.min(2, Math.max(0.5, scale / 100));
+  return baseDelay * factor;
 };
+
 // ========= RPC/API SAFETY WRAPPER =======================================================================
 const safeCall = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
-    for (let i = 0; i < retries; i++) {
+  for (let i = 0; i < retries; i++) {
     try {
-        return await fn();
-        } catch (e: any) {
-const retryable = e?.code === 'CALL_EXCEPTION' || e?.code === 'SERVER_ERROR' || e?.message?.includes('timeout');
-    if (!retryable || i === retries - 1) throw e;
-        console.log(`[RPC RETRY] Attempt ${i + 1} failed, retrying...`);
-            await sleep(600);
-        }
+      return await fn();
+    } catch (e: any) {
+      const retryable = e?.code === 'CALL_EXCEPTION' || e?.code === 'SERVER_ERROR' || e?.message?.includes('timeout');
+      if (!retryable || i === retries - 1) throw e;
+      console.log(`[RPC RETRY] Attempt ${i + 1} failed, retrying...`);
+      await sleep(600);
     }
-    throw new Error('Unreachable safeCall state');
+  }
+  throw new Error('Unreachable safeCall state');
 };
+
 // ==================🔥 Resilient order creation wrapper====================================================
-const createOrderWithRetry = async (
-      clobClient: ClobClient,
-      orderArgs: any,
-      attempts = 3
-) => {
+const createOrderWithRetry = async (clobClient: ClobClient, orderArgs: any, attempts = 3) => {
   for (let i = 0; i < attempts; i++) {
     try {
       return await clobClient.createOrder(orderArgs);
     } catch (e: any) {
-      const isRpcGlitch =
-        e?.code === 'CALL_EXCEPTION' ||
-        e?.message?.includes('missing revert data') ||
-        e?.message?.includes('header not found') ||
-        e?.message?.includes('timeout');
+      const isRpcGlitch = e?.code === 'CALL_EXCEPTION' || e?.message?.includes('missing revert data') || 
+                          e?.message?.includes('header not found') || e?.message?.includes('timeout');
       if (!isRpcGlitch || i === attempts - 1) throw e;
       console.log(`[RPC GLITCH] createOrder retry ${i + 1}/${attempts}`);
       await new Promise(r => setTimeout(r, 400));
     }
   }
 };
+
 // ================================= DYNAMIC EXPOSURE TRACKING =========================================
 const dynamicExposure: Record<string, number> = {};
-const updateDynamicExposure = (
-      tokenId: string,
-      filled: number,
-      side: Side
-) => {
-const current = dynamicExposure[tokenId] ?? 0;
-const newExposure =
-    side === Side.BUY
-      ? current + filled
-      : Math.max(0, current - filled); // never negative
-      dynamicExposure[tokenId] = newExposure;
-      console.log(
-    `[Exposure] ${Side[side]} ${filled} | Token ${tokenId} → ${newExposure} shares`
-  );
+const updateDynamicExposure = (tokenId: string, filled: number, side: Side) => {
+  const current = dynamicExposure[tokenId] ?? 0;
+  const newExposure = side === Side.BUY ? current + filled : Math.max(0, current - filled);
+  dynamicExposure[tokenId] = newExposure;
+  console.log(`[Exposure] ${Side[side]} ${filled} | Token ${tokenId} → ${newExposure} shares`);
 };
+
 // ===================🔥 Enforce min-order size safely with feeMultiplier==============================
-const enforceMinOrder = (
-      estShares: number,
-      marketMinSafe: number,
-      remainingUSDC: number,
-      price: number,
-      feeMultiplier: number
-) => {
-     if (estShares >= marketMinSafe) return estShares;
-const minCost = marketMinSafe * price * feeMultiplier;
-      if (remainingUSDC < minCost) {
-        console.log(`[SKIP ORDER] Not enough USDC for minimum order. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
+const enforceMinOrder = (estShares: number, marketMinSafe: number, remainingUSDC: number, price: number, feeMultiplier: number) => {
+  if (estShares >= marketMinSafe) return estShares;
+  const minCost = marketMinSafe * price * feeMultiplier;
+  if (remainingUSDC < minCost) {
+    console.log(`[SKIP ORDER] Not enough USDC for minimum order. Remaining: $${remainingUSDC.toFixed(6)}, Needed: $${minCost.toFixed(6)}`);
     return 0;
   }
-      console.log(`[MIN ORDER ENFORCED] Bumping ${estShares.toFixed(6)} → ${marketMinSafe} shares`);
+  console.log(`[MIN ORDER ENFORCED] Bumping ${estShares.toFixed(6)} → ${marketMinSafe} shares`);
   return marketMinSafe;
 };
+
 // ================================ POST SINGLE ORDER ====================================================
 const postSingleOrder = async (
-      clobClient: ClobClient,
-      side: Side,
-      tokenId: string,
-      amountRaw: number,
-      priceRaw: number,
-      feeRateBps: number,              // ✅ dynamic fee passed in
-      marketMinSize: number,
-      orderType: OrderType,
-      availableBalance?: number,
-      trade?: UserActivityInterface
+  clobClient: ClobClient, side: Side, tokenId: string, amountRaw: number, priceRaw: number,
+  feeRateBps: number, marketMinSize: number, orderType: OrderType, availableBalance?: number, trade?: UserActivityInterface
 ) => {
-    if (trade) console.log('Incoming trade at postSingleOrder:', trade);
-const price = formatPriceForOrder(priceRaw);
-//=========================== Calculate taker amount including fee ====================================
-const takerAmountSafe = Math.max(amountRaw, marketMinSize);
-const takerAmount = formatTakerAmount(takerAmountSafe);
-const feeMultiplier = 1 + feeRateBps / 10000;
-// =========================== Adjust size sent to CLOB to account for fees ==============================
-const sizeWithFee = formatTakerAmount(takerAmount * feeMultiplier); // 🔹 NEW
-const makerAmountFloat = takerAmount * price;
-const makerAmount = Math.round(makerAmountFloat * 100) / 100; // ✅ ROUND, not floor
-
-const totalCost = makerAmount * feeMultiplier;
-
-    if (availableBalance !== undefined && totalCost > availableBalance) {
-      console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
-      return 0;
-    }
- // =============================== Pass adjusted size to CLOB ==========================
-const orderArgs = {
-      side,
-      tokenID: tokenId,
-      size: sizeWithFee.toFixed(5),       // 🔹 MODIFIED to include fee
-      price: price.toFixed(2),
-      makerAmount: makerAmount.toFixed(2), // 2 decimals
-        feeRateBps
-    };
-console.log('===== ORDER DEBUG =====');
-console.log({
-  price: price.toFixed(2),           // ✅ Format for display
-  takerAmount: takerAmount.toFixed(5), // ✅ Format for display
-  sizeWithFee: sizeWithFee.toFixed(5), // ✅ Format for display
-  makerAmountFloat,
-  makerAmount: makerAmount.toFixed(2), // ✅ Format for display
-  orderArgs,
-});
-const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
-    if (!signedOrder) return 0;
-const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
-if (!resp.success) {
-  const errorMsg = resp.error || 'Unknown error';
+  if (trade) console.log('Incoming trade at postSingleOrder:', trade);
   
-  // ✅ Only log balance errors once, skip the noise
-  if (errorMsg.includes('not enough balance')) {
-    console.log('[ORDER FAILED] Insufficient balance/allowance');
-  } else if (errorMsg.includes('nonce')) {
-    console.log('[ORDER FAILED] Nonce issue');
-  } else if (errorMsg.includes('price')) {
-    console.log('[ORDER FAILED] Price out of range');
-  } else {
-    console.log(`[ORDER FAILED] ${errorMsg}`);
+  const price = formatPriceForOrder(priceRaw);
+  const takerAmountSafe = Math.max(amountRaw, marketMinSize);
+  const takerAmount = formatTakerAmount(takerAmountSafe);
+  const feeMultiplier = 1 + feeRateBps / 10000;
+  const sizeWithFee = formatTakerAmount(takerAmount * feeMultiplier);
+  const makerAmountFloat = takerAmount * price;
+  const makerAmount = Math.round(makerAmountFloat * 100) / 100;
+  const totalCost = makerAmount * feeMultiplier;
+
+  if (availableBalance !== undefined && totalCost > availableBalance) {
+    console.log(`[SKIP ORDER] Not enough balance: need ${totalCost}, have ${availableBalance}`);
+    return 0;
+  }
+
+  const orderArgs = {
+    side, tokenID: tokenId, size: sizeWithFee.toFixed(5), price: price.toFixed(2),
+    makerAmount: makerAmount.toFixed(2), feeRateBps
+  };
+  
+  console.log('===== ORDER DEBUG =====');
+  console.log({ price: price.toFixed(2), takerAmount: takerAmount.toFixed(5), sizeWithFee: sizeWithFee.toFixed(5), makerAmountFloat, makerAmount: makerAmount.toFixed(2), orderArgs });
+  
+  const signedOrder = await createOrderWithRetry(clobClient, orderArgs);
+  if (!signedOrder) return 0;
+  
+  const resp = await safeCall(() => clobClient.postOrder(signedOrder, orderType));
+  if (!resp.success) {
+    const errorMsg = resp.error || 'Unknown error';
+    if (errorMsg.includes('not enough balance')) console.log('[ORDER FAILED] Insufficient balance/allowance');
+    else if (errorMsg.includes('nonce')) console.log('[ORDER FAILED] Nonce issue');
+    else if (errorMsg.includes('price')) console.log('[ORDER FAILED] Price out of range');
+    else console.log(`[ORDER FAILED] ${errorMsg}`);
+    return 0;
   }
   
-  return 0;
-}
-    updateDynamicExposure(tokenId, takerAmount, side);
-    return takerAmount;
+  updateDynamicExposure(tokenId, takerAmount, side);
+  return takerAmount;
 };
+
 //========================================SMART ORDER TYPE SWITCHER==================================
 const executeSmartOrder = async (
-      clobClient: ClobClient,
-      side: Side,
-      tokenId: string,
-      shares: number,
-      bestPrice: number,
-      makerFeeBps: number,           // ✅ kept for maker order
-      takerFeeBps: number,           // ✅ kept for taker order
-      marketMinSafe: number,
-      availableBalance?: number
+  clobClient: ClobClient, side: Side, tokenId: string, shares: number, bestPrice: number,
+  makerFeeBps: number, takerFeeBps: number, marketMinSafe: number, availableBalance?: number
 ) => {
-const improvement = 0.01;
-const makerPrice = side === Side.BUY ? bestPrice - improvement : bestPrice + improvement;
-     console.log(`[SMART] Trying MAKER limit first at $${makerPrice.toFixed(2)}`);
-//======================= ✅ propagate feeMultiplier to postSingleOrder=================================
-const makerFilled = await postSingleOrder(
-       clobClient,
-       side,
-       tokenId,
-       shares,
-       makerPrice,
-       makerFeeBps,            // 🔹 MODIFIED: pass makerFeeBps dynamically
-       marketMinSafe,
-       OrderType.GTC,
-       availableBalance
- );
+  const improvement = 0.01;
+  const makerPrice = side === Side.BUY ? bestPrice - improvement : bestPrice + improvement;
+  console.log(`[SMART] Trying MAKER limit first at $${makerPrice.toFixed(2)}`);
+  
+  const makerFilled = await postSingleOrder(clobClient, side, tokenId, shares, makerPrice, makerFeeBps, marketMinSafe, OrderType.GTC, availableBalance);
   if (makerFilled > 0) return makerFilled;
+  
   await sleep(200);
   console.log(`[SMART] Maker didn't fill — switching to IOC taker`);
-  return await postSingleOrder(
-   clobClient,
-   side,
-   tokenId,
-   shares,
-   bestPrice,
-   takerFeeBps,            // 🔹 MODIFIED: pass takerFeeBps dynamically
-   marketMinSafe,
-   'FAK' as OrderType,
-   availableBalance
- );
+  return await postSingleOrder(clobClient, side, tokenId, shares, bestPrice, takerFeeBps, marketMinSafe, 'FAK' as OrderType, availableBalance);
 };
+
 //======================= ======== MAIN POST ORDER FUNCTION ========================================
 const postOrder = async (
-      clobClient: ClobClient,
-      condition: string,
-      my_position: UserPositionInterface | undefined,
-      user_position: UserPositionInterface | undefined,
-      trade: UserActivityInterface,
-      my_balance: number,
-      user_balance: number
+  clobClient: ClobClient, condition: string, my_position: UserPositionInterface | undefined,
+  user_position: UserPositionInterface | undefined, trade: UserActivityInterface, my_balance: number, user_balance: number
 ) => {
   console.log('Incoming trade detected:', trade);
-    if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
-  console.warn('[SKIP ORDER] Trade missing required fields:', trade);
-      return;
-}
-const marketId = trade.conditionId;
-const tokenId = trade.asset;
-const updateActivity = async () => {
-        await UserActivity.updateOne({ _id: trade._id }, { bot: true });
-  };
-    let market;
-    let makerFeeBps = 0;
-    let takerFeeBps = 0;
-    try {
-          market = await safeCall(() => clobClient.getMarket(marketId));
-          makerFeeBps = Number(market?.maker_base_fee ?? 0);
-          takerFeeBps = Number(market?.taker_base_fee ?? 0);
-} catch (err: any) {
-      if (err.response?.status === 404) {
-            console.warn(`[CLOB] Market ${marketId} not found`);
-    return; // ⚠ return instead of break
-  }
-  console.warn(`[CLOB] Could not fetch market info for ${marketId}`, err);
-  market = { taker_base_fee: 0, maker_base_fee: 0, minimum_order_size: 0 };
-}
-const marketMinSize = market?.minimum_order_size
-  ? parseFloat(market.minimum_order_size)
-  : 1;
-const marketMinSafe = marketMinSize; // always use numeric safe min for enforceMinOrder
-const takerMultiplier = 1 + takerFeeBps / 10000;
-    
-      console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
-    
-// ======== ========================================SELL / MERGE =====================================
-    if (condition === 'merge' || condition === 'sell') {
-      console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
-    if (!my_position) {
-        console.log('No position to sell/merge');
-    await updateActivity();
+  
+  if (!trade || !trade.asset || !trade.conditionId || !trade.price) {
+    console.warn('[SKIP ORDER] Trade missing required fields:', trade);
     return;
   }
-// ========🔥 ADDED: Fetch available shares from CLOB before any calculations ========
-let availableShares = 0;
 
-try {
-  // ✅ ADDED: Use getBalanceAllowance to fetch conditional token balance
-  const bal = await safeCall(() =>
-    clobClient.getBalanceAllowance({
-      asset_type: AssetType.CONDITIONAL,  // ✅ ADDED: Correct enum value
-      token_id: tokenId,
-    })
-  );
+  const marketId = trade.conditionId;
+  const tokenId = trade.asset;
+  const updateActivity = async () => await UserActivity.updateOne({ _id: trade._id }, { bot: true });
 
-  // ✅ ADDED: Parse the returned balance string
-  availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
-  console.log(`[SELL] Available shares in wallet: ${availableShares}`);  // ✅ ADDED
-} catch (err) {
-  console.warn('[SELL] Failed to fetch token balance', err);  // ✅ ADDED
-  await updateActivity();
-  return;
-}
+  let market, makerFeeBps = 0, takerFeeBps = 0;
+  try {
+    market = await safeCall(() => clobClient.getMarket(marketId));
+    makerFeeBps = Number(market?.maker_base_fee ?? 0);
+    takerFeeBps = Number(market?.taker_base_fee ?? 0);
+  } catch (err: any) {
+    if (err.response?.status === 404) {
+      console.warn(`[CLOB] Market ${marketId} not found`);
+      return;
+    }
+    console.warn(`[CLOB] Could not fetch market info for ${marketId}`, err);
+    market = { taker_base_fee: 0, maker_base_fee: 0, minimum_order_size: 0 };
+  }
 
-// ✅ ADDED: Early exit if no shares available
-if (availableShares <= 0) {
-  console.log('[SKIP SELL] No available shares in wallet');
-  await updateActivity();
-  return;
-}
+  const marketMinSize = market?.minimum_order_size ? parseFloat(market.minimum_order_size) : 1;
+  const marketMinSafe = marketMinSize;
+  const takerMultiplier = 1 + takerFeeBps / 10000;
+  
+  console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
 
-    let remaining = my_position.size;
-// ==========================✅ Calculate remaining FIRST (for proportional sells)====================
-  if (condition === 'sell' && user_position) {
-const totalSize = (user_position.size ?? 0) + (trade.size ?? 0);
-    if (!trade.size || trade.size <= 0) {
-      console.warn('[SKIP SELL] Invalid trade.size');
+  // ======== SELL / MERGE =====================================
+  if (condition === 'merge' || condition === 'sell') {
+    console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
+    
+    if (!my_position) {
+      console.log('No position to sell/merge');
       await updateActivity();
       return;
     }
-const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
-    remaining *= ratio;
-  }
- //======================= ✅ MODIFIED: Check against availableShares instead of my_position.size ==============
-  if (remaining > availableShares) {  // 🔹 CHANGED from my_position.size
-    console.log(`[SKIP SELL] Not enough shares. Have: ${availableShares}, Need: ${remaining}`);  // 🔹 MODIFIED
+
+    // 🔥 ADDED: Fetch available shares from CLOB
+    let availableShares = 0;
+    try {
+      const bal = await safeCall(() => clobClient.getBalanceAllowance({ asset_type: AssetType.CONDITIONAL, token_id: tokenId }));
+      availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
+      console.log(`[SELL] Available shares in wallet: ${availableShares}`);
+    } catch (err) {
+      console.warn('[SELL] Failed to fetch token balance', err);
+      await updateActivity();
+      return;
+    }
+
+    if (availableShares <= 0) {
+      console.log('[SKIP SELL] No available shares in wallet');
+      await updateActivity();
+      return;
+    }
+
+    let remaining = my_position.size;
+    
+    if (condition === 'sell' && user_position) {
+      const totalSize = (user_position.size ?? 0) + (trade.size ?? 0);
+      if (!trade.size || trade.size <= 0) {
+        console.warn('[SKIP SELL] Invalid trade.size');
+        await updateActivity();
+        return;
+      }
+      const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
+      remaining *= ratio;
+    }
+
+    if (remaining > availableShares) {
+      console.log(`[SKIP SELL] Not enough shares. Have: ${availableShares}, Need: ${remaining}`);
+      await updateActivity();
+      return;
+    }
+
+    let retry = 0;
+    while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
+      if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
+
+      let orderBook;
+      try {
+        orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+      } catch (err: any) {
+        if (err.response?.status === 404) break;
+        throw err;
+      }
+
+      if (!orderBook?.bids?.length) break;
+
+      const validBids = orderBook.bids.filter(b => !isNaN(parseFloat(b.price)) && !isNaN(parseFloat(b.size)));
+      if (!validBids.length) break;
+
+      const maxPriceBid = validBids.reduce((max, cur) => parseFloat(cur.price) > parseFloat(max.price) ? cur : max);
+      const sellSizeRaw = Math.min(remaining, parseFloat(maxPriceBid.size), availableShares);
+      const sellSize = formatTakerAmount(sellSizeRaw);
+      
+      if (sellSize <= 0) break;
+
+      const filled = await executeSmartOrder(clobClient, Side.SELL, tokenId, sellSize, parseFloat(maxPriceBid.price), makerFeeBps, takerFeeBps, marketMinSafe, my_balance);
+
+      if (!filled) {
+        retry++;
+      } else {
+        remaining -= filled;
+        availableShares -= filled;
+        retry = 0;
+      }
+
+      if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
+    }
+
     await updateActivity();
-    return;
   }
- let retry = 0;
-
-// ✅ MODIFIED: Loop condition now includes availableShares check
-while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {  // 🔹 ADDED availableShares check
-  if (retry >= FAST_ATTEMPTS)
-    await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
-
-  let orderBook;
-  try {
-    orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-  } catch (err: any) {
-    if (err.response?.status === 404) break;
-    throw err;
-  }
-
-  if (!orderBook?.bids?.length) break;
-
-  const validBids = orderBook.bids.filter(b =>
-    !isNaN(parseFloat(b.price)) &&
-    !isNaN(parseFloat(b.size))
-  );
-
-  if (!validBids.length) break;
-
-  const maxPriceBid = validBids.reduce((max, cur) =>
-    parseFloat(cur.price) > parseFloat(max.price) ? cur : max
-  );
-
-  // ✅ MODIFIED: sellSizeRaw now considers availableShares
-  const sellSizeRaw = Math.min(
-    remaining,
-    parseFloat(maxPriceBid.size),
-    availableShares  // 🔹 ADDED: Limit by actual wallet balance
-  );
-
-  const sellSize = formatTakerAmount(sellSizeRaw);
-
-  if (sellSize <= 0) break;
-
-  const filled = await executeSmartOrder(
-    clobClient,
-    Side.SELL,
-    tokenId,
-    sellSize,
-    parseFloat(maxPriceBid.price),
-    makerFeeBps,
-    takerFeeBps,
-    marketMinSafe,
-    my_balance
-  );
-
-  if (!filled) {
-    retry++;
-  } else {
-    remaining -= filled;
-    availableShares -= filled;  // ✅ ADDED: Decrement available shares after fill
-    retry = 0;
-  }
-
-  if (retry >= FAST_ATTEMPTS)
-    await sleepWithJitter(RETRY_DELAY);
-}
-
-await updateActivity();
-}
-// ======================================================= BUY ===================================
+  // ======================================================= BUY ===================================
   else if (condition === 'buy') {
     console.log('Buy Strategy...');
-const userPortfolio = user_balance + (user_position?.size ?? 0) * trade.price;
-const tradeUSDC = trade.usdcSize ?? 0;
-        if (tradeUSDC <= 0) {
-          console.warn('[SKIP ORDER] Trade missing or invalid usdcSize');
-          return;
-            }
-const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
-// ====================================✅ NEW: Filter by exposure threshold==================================
-const MIN_TRADE_SIZE_USD = 9; // Only mirror trades >= $9
+    
+    const userPortfolio = user_balance + (user_position?.size ?? 0) * trade.price;
+    const tradeUSDC = trade.usdcSize ?? 0;
+    
+    if (tradeUSDC <= 0) {
+      console.warn('[SKIP ORDER] Trade missing or invalid usdcSize');
+      return;
+    }
+
+    const userExposurePct = tradeUSDC / Math.max(userPortfolio, 1);
+    const MIN_TRADE_SIZE_USD = 9;
+    
     if (tradeUSDC < MIN_TRADE_SIZE_USD) {
-    console.log(`[SKIP ORDER] Trade value too low: $${tradeUSDC.toFixed(6)} < $${MIN_TRADE_SIZE_USD} threshold`);
-    await updateActivity();
-    return;
-  }
-  console.log(`✅ HIGH CONVICTION TRADE: ${(userExposurePct*100).toFixed(6)}% exposure, $${tradeUSDC.toFixed(6)} value`);
-// ==================================... rest of your existing buy logic=========================================
-const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
-const targetExposureValue = userExposurePct * (myPortfolio);
-const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
+      console.log(`[SKIP ORDER] Trade value too low: $${tradeUSDC.toFixed(6)} < $${MIN_TRADE_SIZE_USD} threshold`);
+      await updateActivity();
+      return;
+    }
+    
+    console.log(`✅ HIGH CONVICTION TRADE: ${(userExposurePct*100).toFixed(6)}% exposure, $${tradeUSDC.toFixed(6)} value`);
+
+    const myPortfolio = my_balance + (my_position?.size ?? 0) * trade.price;
+    const targetExposureValue = userExposurePct * myPortfolio;
+    const currentExposureValue = (dynamicExposure[tokenId] ?? 0) * trade.price;
+    
     console.log(`[BUY] Mirroring user exposure (relative to balance):`);
     console.log(`  User exposure %: ${(userExposurePct*100).toFixed(6)}%`);
     console.log(`  Target exposure for you: $${targetExposureValue.toFixed(6)}`);
     console.log(`  Current exposure: $${currentExposureValue.toFixed(6)}`);
-  let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
+    
+    let remainingUSDC = Math.max(0, targetExposureValue - currentExposureValue);
     remainingUSDC = Math.min(remainingUSDC, my_balance);
     console.log(`  Remaining USDC to spend: $${remainingUSDC.toFixed(6)}`);
+
     let retry = 0;
     while (remainingUSDC > 0 && retry < RETRY_LIMIT) {
-      if (retry >= FAST_ATTEMPTS) 
-        await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
-let orderBook;
-try {
-  orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
-} catch (err: any) {
-  if (err.response?.status === 404) break;
-  throw err;
-}
-// ============================Validate ASK side (because this is BUY logic)=====================================
-if (
-  !orderBook ||
-  !Array.isArray(orderBook.asks) ||
-  orderBook.asks.length === 0
-) {
-  console.warn(`[SKIP ORDER] Empty ask side for token ${tokenId}`);
-  break;
-}
-// Filter valid asks
-const validAsks = orderBook.asks.filter(a =>
-  !isNaN(parseFloat(a.price)) &&
-  !isNaN(parseFloat(a.size))
-);
-if (validAsks.length === 0) {
-  console.warn('[SKIP ORDER] No valid asks');
-  break;
-}
-// Get lowest ask safely
-const minPriceAsk = validAsks.reduce((min, cur) =>
-  parseFloat(cur.price) < parseFloat(min.price) ? cur : min
-);
+      if (retry >= FAST_ATTEMPTS) await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remainingUSDC));
+
+      let orderBook;
+      try {
+        orderBook = await safeCall(() => clobClient.getOrderBook(tokenId));
+      } catch (err: any) {
+        if (err.response?.status === 404) break;
+        throw err;
+      }
+
+      if (!orderBook || !Array.isArray(orderBook.asks) || orderBook.asks.length === 0) {
+        console.warn(`[SKIP ORDER] Empty ask side for token ${tokenId}`);
+        break;
+      }
+
+      const validAsks = orderBook.asks.filter(a => !isNaN(parseFloat(a.price)) && !isNaN(parseFloat(a.size)));
+      if (validAsks.length === 0) {
+        console.warn('[SKIP ORDER] No valid asks');
+        break;
+      }
+
+      const minPriceAsk = validAsks.reduce((min, cur) => parseFloat(cur.price) < parseFloat(min.price) ? cur : min);
       const askPriceRaw = parseFloat(minPriceAsk.price);
-            if (!isFinite(askPriceRaw) || askPriceRaw <= 0) break;
+      
+      if (!isFinite(askPriceRaw) || askPriceRaw <= 0) break;
+      
       const askSize = parseFloat(minPriceAsk.size);
-          if (isNaN(askSize) || askSize <= 0) break;
-          if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
-let estShares = Math.min(
-  remainingUSDC / (askPriceRaw * (1 + takerFeeBps / 10000)),  // 🔹 MODIFIED: dynamic fee
-  askSize
-);
-       estShares = enforceMinOrder(
-  estShares,
-  marketMinSafe,
-  remainingUSDC,
-  askPriceRaw,
-  1 + takerFeeBps / 10000
-);
-const estimatedCost = estShares * askPriceRaw * (1 + takerFeeBps / 10000);
-    if (estimatedCost > remainingUSDC) {
-          console.log('[SKIP ORDER] Insufficient funds for order');
-          break;
-}
-const rawCost = estShares * askPriceRaw;
-// Force cost to 2 decimals FIRST
-const costRounded = Math.floor(rawCost * 100) / 100; // 2 decimals
-// Recalculate shares from rounded cost
-const sharesToBuy = formatTakerAmount(estShares);
-const makerAmountForOrder = Math.floor(sharesToBuy * askPriceRaw * 100) / 100;
-const feeMultiplier = 1 + takerFeeBps / 10000;
-const sizeWithFee = formatTakerAmount(sharesToBuy * feeMultiplier);
-        console.log(`[BUY] Attempting to buy ${sharesToBuy} shares (sizeWithFee sent: ${sizeWithFee}) at $${askPriceRaw.toFixed(4)}`);
-        console.log(`  Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`);
-        console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
+      if (isNaN(askSize) || askSize <= 0) break;
+      if (Math.abs(askPriceRaw - trade.price) > 0.05) break;
+
+      let estShares = Math.min(remainingUSDC / (askPriceRaw * (1 + takerFeeBps / 10000)), askSize);
+      estShares = enforceMinOrder(estShares, marketMinSafe, remainingUSDC, askPriceRaw, 1 + takerFeeBps / 10000);
+
+      const estimatedCost = estShares * askPriceRaw * (1 + takerFeeBps / 10000);
+      if (estimatedCost > remainingUSDC) {
+        console.log('[SKIP ORDER] Insufficient funds for order');
+        break;
+      }
+
+      const rawCost = estShares * askPriceRaw;
+      const costRounded = Math.floor(rawCost * 100) / 100;
+      const sharesToBuy = formatTakerAmount(estShares);
+      const makerAmountForOrder = Math.floor(sharesToBuy * askPriceRaw * 100) / 100;
+      const feeMultiplier = 1 + takerFeeBps / 10000;
+      const sizeWithFee = formatTakerAmount(sharesToBuy * feeMultiplier);
+
+      console.log(`[BUY] Attempting to buy ${sharesToBuy} shares (sizeWithFee sent: ${sizeWithFee}) at $${askPriceRaw.toFixed(4)}`);
+      console.log(`  Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`);
+      console.log(`  Remaining USDC before order: $${remainingUSDC.toFixed(6)}`);
+
       if (remainingUSDC < 0.0001) break;
-const filled = await executeSmartOrder(
-  clobClient,
-  Side.BUY,
-  tokenId,
-  sharesToBuy,
-  askPriceRaw,
-  makerFeeBps,
-  takerFeeBps,
-  marketMinSafe,
-  my_balance
-);
-      if (!filled) retry++;
-      else {
-const makerAmountRounded = Math.floor((filled * askPriceRaw) * 100) / 100;
-const actualCost = makerAmountRounded * (1 + takerFeeBps / 10000);  // 🔹 MODIFIED
-        remainingUSDC -= actualCost;  // ✅ now deduct cost with dynamic fee
-                retry = 0;
+
+      const filled = await executeSmartOrder(clobClient, Side.BUY, tokenId, sharesToBuy, askPriceRaw, makerFeeBps, takerFeeBps, marketMinSafe, my_balance);
+
+      if (!filled) {
+        retry++;
+      } else {
+        const makerAmountRounded = Math.floor((filled * askPriceRaw) * 100) / 100;
+        const actualCost = makerAmountRounded * (1 + takerFeeBps / 10000);
+        remainingUSDC -= actualCost;
+        retry = 0;
         console.log(`[BUY FILLED] Bought ${filled} shares at $${askPriceRaw.toFixed(2)} (Cost: $${(makerAmountRounded * takerMultiplier).toFixed(6)})`);
         console.log(`  Remaining USDC after order: $${remainingUSDC.toFixed(6)}`);
         console.log(`  Total dynamic exposure for token ${tokenId}: ${dynamicExposure[tokenId]} shares`);
         console.log(`  Exposure value: $${(dynamicExposure[tokenId]*askPriceRaw).toFixed(6)}`);
-        console.log(`Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`); // 🔹 MODIFIED
+        console.log(`Fee multiplier: ${(1 + takerFeeBps / 10000).toFixed(4)}`);
       }
+
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
     }
+    
     await updateActivity();
   } else {
     console.log('Condition not supported');
