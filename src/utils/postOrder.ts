@@ -374,12 +374,7 @@ const postOrder = async (
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
     }
     
-    // 🔹 Track this market for future redemption
-    await MarketToRedeem.findOneAndUpdate(
-      { conditionId: marketId },
-      { conditionId: marketId },
-      { upsert: true }
-    );
+ 
 
     await updateActivity();
   }
