@@ -260,16 +260,6 @@ const takerMultiplier = 1 + takerFeeBps / 10000;
     await updateActivity();
     return;
   }
-    let remaining = my_position.size;
-// ==========================✅ Calculate remaining FIRST (for proportional sells)====================
-    if (condition === 'merge' || condition === 'sell') {
-      console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
-    if (!my_position) {
-        console.log('No position to sell/merge');
-    await updateActivity();
-    return;
-  }
-
 // ========🔥 ADDED: Fetch available shares from CLOB before any calculations ========
 let availableShares = 0;
 
