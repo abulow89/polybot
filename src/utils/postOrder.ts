@@ -373,19 +373,19 @@ const postOrder = async (
       
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
     }
-  }
-  
-        // 🔹 NEW: Track this market for future redemption
-  await MarketToRedeem.findOneAndUpdate(
-    { conditionId: marketId },
-    { conditionId: marketId },
-    { upsert: true }
-  );
     
-      await updateActivity();
-}
-   else {
+    // 🔹 Track this market for future redemption
+    await MarketToRedeem.findOneAndUpdate(
+      { conditionId: marketId },
+      { conditionId: marketId },
+      { upsert: true }
+    );
+
+    await updateActivity();
+  }
+  else {
     console.log('Condition not supported');
-  };
+  }
+};
 
 export default postOrder;
