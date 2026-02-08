@@ -2,6 +2,7 @@ import { ClobClient, OrderType, Side, AssetType} from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
+import { MarketToRedeem } from '../models/marketToRedeem';
 
 // ===== EXCHANGE FORMAT HELPERS =============================================================================
 const clampPrice = (p: number) => Math.min(0.999, Math.max(0.001, p));
@@ -372,7 +373,13 @@ const postOrder = async (
 
       if (retry >= FAST_ATTEMPTS) await sleepWithJitter(RETRY_DELAY);
     }
-    
+      // 🔹 NEW: Track this market for future redemption
+  await MarketToRedeem.findOneAndUpdate(
+    { conditionId: marketId },
+    { conditionId: marketId },
+    { upsert: true }
+  );
+}
     await updateActivity();
   } else {
     console.log('Condition not supported');
