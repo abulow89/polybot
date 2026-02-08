@@ -1,4 +1,4 @@
-import { ClobClient, OrderType, Side} from '@polymarket/clob-client';
+import { ClobClient, OrderType, Side, AssetType} from '@polymarket/clob-client';
 import { UserActivityInterface, UserPositionInterface } from '../interfaces/User';
 import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
@@ -251,31 +251,7 @@ const marketMinSafe = marketMinSize; // always use numeric safe min for enforceM
 const takerMultiplier = 1 + takerFeeBps / 10000;
     
       console.log(`[Balance] My balance: ${my_balance}, User balance: ${user_balance}`);
-    // ======== Fetch available shares safely from CLOB ========
-let availableShares = 0;
-
-try {
-  // Use getBalanceAllowance instead of getBalance
-  const bal = await safeCall(() =>
-    clobClient.getBalanceAllowance({
-      asset_type: AssetType."CONDITIONAL",
-      token_id: tokenId,
-    })
-  );
-
-  // Parse the returned balance string
-  availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
-} catch (err) {
-  console.warn('[SELL] Failed to fetch token balance', err);
-  await updateActivity();
-  return;
-}
-
-if (availableShares <= 0) {
-  console.log('[SKIP SELL] No available shares in wallet');
-  await updateActivity();
-  return;
-}
+    
 // ======== ========================================SELL / MERGE =====================================
     if (condition === 'merge' || condition === 'sell') {
       console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
@@ -284,6 +260,44 @@ if (availableShares <= 0) {
     await updateActivity();
     return;
   }
+    let remaining = my_position.size;
+// ==========================✅ Calculate remaining FIRST (for proportional sells)====================
+    if (condition === 'merge' || condition === 'sell') {
+      console.log(`${condition === 'merge' ? 'Merging' : 'Sell'} Strategy...`);
+    if (!my_position) {
+        console.log('No position to sell/merge');
+    await updateActivity();
+    return;
+  }
+
+// ========🔥 ADDED: Fetch available shares from CLOB before any calculations ========
+let availableShares = 0;
+
+try {
+  // ✅ ADDED: Use getBalanceAllowance to fetch conditional token balance
+  const bal = await safeCall(() =>
+    clobClient.getBalanceAllowance({
+      asset_type: AssetType.CONDITIONAL,  // ✅ ADDED: Correct enum value
+      token_id: tokenId,
+    })
+  );
+
+  // ✅ ADDED: Parse the returned balance string
+  availableShares = formatTakerAmount(parseFloat(bal?.balance ?? '0'));
+  console.log(`[SELL] Available shares in wallet: ${availableShares}`);  // ✅ ADDED
+} catch (err) {
+  console.warn('[SELL] Failed to fetch token balance', err);  // ✅ ADDED
+  await updateActivity();
+  return;
+}
+
+// ✅ ADDED: Early exit if no shares available
+if (availableShares <= 0) {
+  console.log('[SKIP SELL] No available shares in wallet');
+  await updateActivity();
+  return;
+}
+
     let remaining = my_position.size;
 // ==========================✅ Calculate remaining FIRST (for proportional sells)====================
   if (condition === 'sell' && user_position) {
@@ -296,15 +310,16 @@ const totalSize = (user_position.size ?? 0) + (trade.size ?? 0);
 const ratio = totalSize > 0 ? (trade.size ?? 0) / totalSize : 0;
     remaining *= ratio;
   }
- //======================= ✅ THEN check if we have enough shares (moved AFTER calculation)=================
-  if (remaining > my_position.size) {
-    console.log(`[SKIP SELL] Not enough shares. Have: ${my_position.size}, Need: ${remaining}`);
+ //======================= ✅ MODIFIED: Check against availableShares instead of my_position.size ==============
+  if (remaining > availableShares) {  // 🔹 CHANGED from my_position.size
+    console.log(`[SKIP SELL] Not enough shares. Have: ${availableShares}, Need: ${remaining}`);  // 🔹 MODIFIED
     await updateActivity();
     return;
   }
  let retry = 0;
 
-while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
+// ✅ MODIFIED: Loop condition now includes availableShares check
+while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {  // 🔹 ADDED availableShares check
   if (retry >= FAST_ATTEMPTS)
     await sleepWithJitter(adaptiveDelay(ORDERBOOK_DELAY, remaining));
 
@@ -329,10 +344,11 @@ while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
     parseFloat(cur.price) > parseFloat(max.price) ? cur : max
   );
 
+  // ✅ MODIFIED: sellSizeRaw now considers availableShares
   const sellSizeRaw = Math.min(
     remaining,
     parseFloat(maxPriceBid.size),
-    availableShares
+    availableShares  // 🔹 ADDED: Limit by actual wallet balance
   );
 
   const sellSize = formatTakerAmount(sellSizeRaw);
@@ -355,7 +371,7 @@ while (remaining > 0 && retry < RETRY_LIMIT && availableShares > 0) {
     retry++;
   } else {
     remaining -= filled;
-    availableShares -= filled;
+    availableShares -= filled;  // ✅ ADDED: Decrement available shares after fill
     retry = 0;
   }
 
