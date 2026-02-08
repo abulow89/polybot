@@ -3,7 +3,7 @@ import { getUserActivityModel } from '../models/userHistory';
 import { ENV } from '../config/env';
 
 const UserActivity = getUserActivityModel(ENV.USER_ADDRESS);
-const REDEEM_INTERVAL = 2 * 60 * 1000; // 2 minutes in milliseconds
+const REDEEM_INTERVAL = 1 * 60 * 1000; // 1 minutes in milliseconds
 
 /**
  * Background service that checks and redeems resolved markets every 2 minutes
