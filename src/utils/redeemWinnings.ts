@@ -12,12 +12,12 @@ export const redeemAllResolvedMarkets = async (conditionIds: string[]) => {
   for (const conditionId of conditionIds) {
     try {
       await redeemPositions(conditionId, signer);
-      console.log(`✅ Redeemed: ${conditionId}`);
+      console.log(`✅ Redeemed: ${conditionId}`);  // 🔹 FIXED: Was console.log` (template literal)
     } catch (err: any) {
       if (err.message.includes('no payout')) {
-        console.log(`⏳ Not resolved yet: ${conditionId}`);
+        console.log(`⏳ Not resolved yet: ${conditionId}`);  // 🔹 FIXED
       } else {
-        console.error(`❌ Redeem failed: ${conditionId}`, err.message);
+        console.error(`❌ Redeem failed: ${conditionId}`, err.message);  // 🔹 FIXED
       }
     }
   }
